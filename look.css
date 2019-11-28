@@ -83,7 +83,6 @@ body {
 
 .conceptData > div {
     float:left;
-    width:164px;
 }
 
 .conceptData:after {
@@ -101,11 +100,13 @@ body {
 .conceptKeyWords {
     padding-top: 30px;
     padding-right:40px;
+    width: 197px;
 }
 
 .conceptInfos {
     padding-top: 60px;
-    padding-bottom:50px;
+    padding-bottom:20px;
+    width: 197px;
 }
 
 /* ---------- */
@@ -117,7 +118,13 @@ body {
     width:230px;
     height:230px;
     text-align: center;
+    transform: scale(0.7);
     background: #ff0015;
+    transition: all 0.2s;
+}
+
+.concept.selected .conceptName {
+    transform: scale(1);
 }
 
 .conceptName span {

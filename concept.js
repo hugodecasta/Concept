@@ -35,18 +35,32 @@ function set_GX_track(GX_track) {
 
 $(document).keypress(async function(e) {
     let code = e.originalEvent.code
+    console.log(code)
     if(code == 'KeyK') {
         let cur = await get_selected_concept()
         if(cur == null)
             return null
         let keyword = prompt('keyword','')
+        if(keyword == null)
+            return null
         cur.keywords.push(keyword)
         await set_concept(cur)
-    } else if(code == 'KeyX'){
+    }
+    if(code == 'KeyX'){
         let cur = await get_selected_concept()
         if(cur == null)
             return null
         await remove_concept(cur.name)
+    }
+    if(code == 'KeyI'){
+        let cur = await get_selected_concept()
+        if(cur == null)
+            return null
+        let info = prompt('info','')
+        if(info == null)
+            return null
+        cur.infos.push(info)
+        await set_concept(cur)
     }
 })
 
@@ -132,6 +146,8 @@ function GX_create_concept(concept, cze_meth=function(){}) {
     let infos = concept.infos
     let keywords = concept.keywords
 
+    let innib = false
+
     let concept_GX = $('<div>').addClass('concept').draggable({
         stop: function() {
             let left = concept_GX.css('left')
@@ -139,6 +155,7 @@ function GX_create_concept(concept, cze_meth=function(){}) {
             let gxt = get_GX_track()
             gxt[concept_name] = {left:left,top:top}
             set_GX_track(gxt)
+            innib = true
         }
     })
 
@@ -164,6 +181,11 @@ function GX_create_concept(concept, cze_meth=function(){}) {
         keywords_GX.append(GX_create_keyword(keyword, false, cze_meth))
 
     function select_method(e) {
+
+        if(innib) {
+            innib = false
+            return
+        }
 
         let was_selected = concept_GX.hasClass('selected')
         for(let ccgx of $.find('.concept.selected')) {
@@ -238,6 +260,7 @@ async function main() {
                 let concept = prompt_new_concept(keyword,'')
                 if(concept == null)
                     return null
+                set_selected_concept(keyword)
                 await set_concept(concept)
             })
             $('.concepts').append(concept_GX)

@@ -7,15 +7,32 @@ var GX_concepts = {}
 
 // -------------------------------------------------------------------------------- DATA INFO
 
+function get_selected(item_name) {
+    return localStorage.getItem(item_name)
+}
+
+function set_selected(item_name, selected) {
+    if(selected == null) {
+        localStorage.removeItem(item_name)
+        return
+    }
+    localStorage.setItem(item_name,selected)
+}
+
+function set_selected_caps(type,cap_name) {
+    set_selected('caps_type',type)
+    set_selected('caps',cap_name)
+}
+
 async function get_selected_concept() {
-    let name = localStorage.getItem('selected_concept')
+    let name = get_selected('selected_concept')
     if(name == null)
         return null
     return await get_concept(name)
 }
 
 function set_selected_concept(concept_name) {
-    localStorage.setItem('selected_concept',concept_name)
+    set_selected('selected_concept',concept_name)
 }
 
 function get_GX_track() {
@@ -33,35 +50,71 @@ function set_GX_track(GX_track) {
 
 // -------------------------------------------------------------------------------- HANDLERS
 
-$(document).keypress(async function(e) {
-    let code = e.originalEvent.code
-    console.log(code)
-    if(code == 'KeyK') {
-        let cur = await get_selected_concept()
-        if(cur == null)
+var key_actions = {
+    'KeyX':async function() {
+        let concept = await get_selected_concept()
+        if(concept == null)
+            return null
+        let caps_type = await get_selected('caps_type')
+        let caps = await get_selected('caps')
+        if(caps_type == null) {
+            if(! confirm('do you really want to remove "'+concept.name+'"'))
+                return
+            await remove_concept(concept.name)
+        } else {
+            let array = caps_type=='info'?'infos':'keywords'
+            let index = concept[array].indexOf(caps)
+            concept[array].splice(index,1)
+            await set_concept(concept)
+        }
+    },
+    'Enter':async function() {
+        let concept = await get_selected_concept()
+        if(concept == null)
             return null
         let keyword = prompt('keyword','')
         if(keyword == null)
             return null
-        cur.keywords.push(keyword)
-        await set_concept(cur)
-    }
-    if(code == 'KeyX'){
-        let cur = await get_selected_concept()
-        if(cur == null)
-            return null
-        await remove_concept(cur.name)
-    }
-    if(code == 'KeyI'){
-        let cur = await get_selected_concept()
-        if(cur == null)
+        concept.keywords.push(keyword)
+        await set_concept(concept)
+        set_selected_caps('keyword',keyword)
+    },
+    'KeyI':async function() {
+        let concept = await get_selected_concept()
+        if(concept == null)
             return null
         let info = prompt('info','')
         if(info == null)
             return null
-        cur.infos.push(info)
-        await set_concept(cur)
+        concept.infos.push(info)
+        await set_concept(concept)
+        set_selected_caps('info',info)
+    },
+    'KeyC':async function() {
+        let concept = await get_selected_concept()
+        let caps_type = await get_selected('caps_type')
+        let keyword = await get_selected('caps')
+        if(concept == null || keyword == null || caps_type != 'keyword')
+            return null
+        let cor_concept = await get_concept(keyword)
+        if(cor_concept == null) {
+            cor_concept = prompt_new_concept(keyword)
+            if(cor_concept == null) {
+                return null
+            }
+            await set_concept(cor_concept)
+            set_selected_concept(cor_concept.name)
+        } else {
+            select_concept(cor_concept.name)
+        }
     }
+}
+
+$(document).keypress(async function(e) {
+    let code = e.originalEvent.code
+    if(!key_actions.hasOwnProperty(code))
+        return
+    await key_actions[code]()
 })
 
 // -------------------------------------------------------------------------------- CONCEPTS
@@ -84,7 +137,10 @@ async function set_concept(concept) {
 }
 
 async function get_concept(name) {
-    return (await get_concepts())[name]
+    let concepts = await get_concepts()
+    if(! concepts.hasOwnProperty(name))
+        return null
+    return concepts[name]
 }
 
 async function remove_concept(name) {
@@ -96,42 +152,50 @@ async function remove_concept(name) {
 // -------------------------------------------------------------------------------- GX
 
 function select_concept(concept_name) {
-    GX_concepts[concept_name]()
+    GX_concepts[concept_name].select()
 }
 
-// -------------------------------------------------------------------------------- GX
+function unselect_concept(concept_name) {
+    GX_concepts[concept_name].unselect()
+}
+
+// -------------------------------------------------------------------------------- GX**
+
+function GX_create_caps(indata, type) {
+    let caps_GX = $('<div>').addClass(type+' caps')
+    .html(indata)
+
+    if(get_selected('caps_type') == type && get_selected('caps') == indata)
+        caps_GX.addClass('selected')
+
+    caps_GX.click(function(){
+        let was_selected = caps_GX.hasClass('selected')
+        for(let kwgx of $.find('.caps.selected')) {
+            $(kwgx).removeClass('selected')
+        }
+        if(was_selected) {
+            caps_GX.removeClass('selected')
+            set_selected('caps_type',null)
+            set_selected('caps',null)
+        }
+        else {
+            caps_GX.addClass('selected')
+            set_selected('caps_type',type)
+            set_selected('caps',indata)
+        }
+    })
+
+    return caps_GX
+}
 
 function GX_create_info(info) {
-    let info_GX = $('<div>').addClass('conceptInfo')
-    .html(info)
+    let info_GX = GX_create_caps(info, 'info')
     return info_GX
 }
 
-function GX_create_keyword(keyword, selected, cze_meth=function(){}) {
-    let keyword_GX = $('<div>').addClass('keyWord')
-    .html(keyword)
-    if(selected)
-        keyword_GX.addClass('selected')
-    let conceptBtn = $('<div>').addClass('conceptualizeBtn')
-    keyword_GX.append(conceptBtn)
-
-    keyword_GX.click(function(){
-        let was_selected = keyword_GX.hasClass('selected')
-        for(let kwgx of $.find('.keyWord.selected')) {
-            $(kwgx).removeClass('selected')
-        }
-        if(was_selected)
-            keyword_GX.removeClass('selected')
-        else
-            keyword_GX.addClass('selected')
-    })
-
-    conceptBtn.click(function() {
-        cze_meth(keyword)
-    })
-
+function GX_create_keyword(keyword) {
+    let keyword_GX = GX_create_caps(keyword, 'keyword')
     return keyword_GX
-
 }
 
 function GX_create_concept_name(concept_name) {
@@ -140,7 +204,7 @@ function GX_create_concept_name(concept_name) {
     return name_GX
 }
 
-function GX_create_concept(concept, cze_meth=function(){}) {
+function GX_create_concept(concept) {
 
     let concept_name = concept.name
     let infos = concept.infos
@@ -178,33 +242,44 @@ function GX_create_concept(concept, cze_meth=function(){}) {
         
 
     for(let keyword of keywords)
-        keywords_GX.append(GX_create_keyword(keyword, false, cze_meth))
+        keywords_GX.append(GX_create_keyword(keyword))
 
-    function select_method(e) {
+    async function select_method(e) {
+        let pre_selected = await get_selected_concept()
+        if(pre_selected != null)
+            unselect_concept(pre_selected.name)
+        concept_GX.addClass('selected')
+        set_selected_concept(concept_name)
+    }
 
+    function unselect_method() {
+        concept_GX.removeClass('selected')
+        set_selected_concept(null)
+        set_selected('caps_type',null)
+        set_selected('caps',null)
+        $('.caps.selected').removeClass('selected')
+    }
+
+    name_GX.click(function(e) {
         if(innib) {
             innib = false
             return
         }
-
-        let was_selected = concept_GX.hasClass('selected')
-        for(let ccgx of $.find('.concept.selected')) {
-            $(ccgx).removeClass('selected')
-        }
-        if(was_selected)
-            concept_GX.removeClass('selected')
-        else {
-            concept_GX.addClass('selected')
-            set_selected_concept(concept_name)
+        if(concept_GX.hasClass('selected')) {
+            unselect_method()
+        } else {
+            select_method()
         }
         if(e!=undefined && e.ctrlKey) {
-            console.log('coucou')
             window.open(concept.url, '_blank');
         }
-    }
+    })
 
-    name_GX.click(select_method)
-    GX_concepts[concept_name] = select_method
+    GX_concepts[concept_name] = {
+        select:select_method,
+        unselect:unselect_method,
+        selected:false
+    }
 
     return concept_GX
 
@@ -240,8 +315,6 @@ async function main() {
     let concepts = await get_concepts()
     bm.register_checker('concepts',async function(concepts) {
 
-        console.log('----')
-
         $('.concepts').html('')
         if(Object.keys(concepts).length == 0) {
             createBtn.addClass('center')
@@ -249,7 +322,6 @@ async function main() {
             createBtn.removeClass('center')
         }
         for(let id in concepts) {
-            console.log(id)
             let concept = concepts[id]
             let concept_GX = GX_create_concept(concept,async function(keyword){
                 let concepts = await get_concepts()

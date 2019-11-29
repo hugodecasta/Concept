@@ -35,12 +35,17 @@ async function set_selected_caps(type,cap_name) {
 }
 
 async function get_selected_concept() {
-    let concept = await get_selected('selected_concept')
-    return concept
+    let concept_name = await get_selected('selected_concept')
+    if(concept_name == null)
+        return null
+    return await get_concept(concept_name)
 }
 
 async function set_selected_concept(concept) {
-    await set_selected('selected_concept',concept)
+    let name = null
+    if(concept != null)
+        name = concept.name
+    await set_selected('selected_concept',name)
 }
 
 async function get_GX_track() {
@@ -225,8 +230,6 @@ function GX_create_concept_name(concept_name) {
 function GX_create_concept(concept) {
 
     let concept_name = concept.name
-    let infos = concept.infos
-    let keywords = concept.keywords
 
     let innib = false
 
@@ -248,6 +251,17 @@ function GX_create_concept(concept) {
 
     data_GX.append(infos_GX).append(keywords_GX)
     concept_GX.append(name_GX,data_GX)
+
+    register_concept_checker(concept_name,function(new_concept) {
+        let infos = new_concept.infos
+        let keywords = new_concept.keywords
+        infos_GX.html('')
+        keywords_GX.html('')
+        for(let info of infos)
+            infos_GX.append(GX_create_info(info))
+        for(let keyword of keywords)
+            keywords_GX.append(GX_create_keyword(keyword))
+    })
     
     concept_GX.draggable({
         handle:name_GX,
@@ -263,13 +277,6 @@ function GX_create_concept(concept) {
             innib = true
         }
     })
-
-    for(let info of infos)
-        infos_GX.append(GX_create_info(info))
-        
-
-    for(let keyword of keywords)
-        keywords_GX.append(GX_create_keyword(keyword))
 
     async function select_method(e) {
         let pre_selected = await get_selected_concept()
@@ -327,7 +334,86 @@ function prompt_new_concept(name, url='') {
     return concept
 }
 
+// -------------------------------------------------------------------------------- UPDATERS
+
+var concept_checkers = {}
+
+function register_concept_checker(concept_name,callback) {
+
+    if(!concept_checkers.hasOwnProperty(concept_name)) {
+        let checker = {
+            last_data:'',
+            callbacks:[]
+        }
+        concept_checkers[concept_name] = checker
+    }
+    concept_checkers[concept_name].callbacks.push(callback)
+    
+    async function launch_cb() {
+        let concept = await get_concept(concept_name)
+        callback(concept)
+    }
+    launch_cb()
+}
+
+function init_updater(createBtn) {
+
+    async function init_concept(concept) {
+        let concept_GX = GX_create_concept(concept,async function(keyword){
+            let concepts = await get_concepts()
+            if(concepts.hasOwnProperty(keyword)) {
+                select_concept(keyword)
+                return
+            }
+            let concept = prompt_new_concept(keyword,'')
+            if(concept == null)
+                return null
+            await set_selected_concept(keyword)
+            await set_concept(concept)
+        })
+        $('.concepts').append(concept_GX)
+    }
+
+    function update_add_btn(concepts) {
+        if(Object.keys(concepts).length == 0) {
+            createBtn.addClass('center')
+        } else {
+            createBtn.removeClass('center')
+        }
+    }
+
+    bm.register_checker('concepts',async function(concepts) {
+        update_add_btn(concepts)
+        for(let name in concepts) {
+            let concept = concepts[name]
+            if(!concept_checkers.hasOwnProperty(name)) {
+                init_concept(concept)
+            } else {
+                let checker = concept_checkers[name]
+                let last_data = checker.last_data
+                let new_data = JSON.stringify(concept)
+                let callbacks = checker.callbacks
+                if(last_data != new_data) {
+                    for(let cb of callbacks)
+                        cb(concept)
+                }
+                checker.last_data = new_data
+            }
+        }
+    
+        let selected = await get_selected_concept()
+        if(selected != null)
+            select_concept(selected.name)
+    })
+
+}
+
+// -------------------------------------------------------------------------------- CORE
+
 async function main() {
+
+    $('.options').html('')
+    $('.concepts').html('')
 
     let createBtn = $('<div>').addClass('createBtn')
     $('.options').append(createBtn)
@@ -338,35 +424,7 @@ async function main() {
         await set_concept(concept)
     })
 
-    let concepts = await get_concepts()
-    bm.register_checker('concepts',async function(concepts) {
-
-        $('.concepts').html('')
-        if(Object.keys(concepts).length == 0) {
-            createBtn.addClass('center')
-        } else {
-            createBtn.removeClass('center')
-        }
-        for(let id in concepts) {
-            let concept = concepts[id]
-            let concept_GX = GX_create_concept(concept,async function(keyword){
-                let concepts = await get_concepts()
-                if(concepts.hasOwnProperty(keyword)) {
-                    select_concept(keyword)
-                    return
-                }
-                let concept = prompt_new_concept(keyword,'')
-                if(concept == null)
-                    return null
-                await set_selected_concept(keyword)
-                await set_concept(concept)
-            })
-            $('.concepts').append(concept_GX)
-        }
-        let selected = await get_selected_concept()
-        if(selected != null)
-            select_concept(selected.name)
-    })
+    init_updater(createBtn)
 }
 
 main()

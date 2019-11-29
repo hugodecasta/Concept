@@ -40,6 +40,12 @@ body {
     left:20px;
     top:20px;
     z-index: 0;
+    animation: concept_appear 1s forwards;
+}
+
+@keyframes concept_appear {
+    0%{opacity:0;}
+    100%{opacity:1;}
 }
 
 .concept.selected {

@@ -13,3 +13,5 @@ Pre-list of types:
 
 (boolMaster will be used to store data)
 The system can found recurrent keywords and propose to look for them more in detail.
+
+One great thing to do is not only link keyword litterals to their concepts but also be able to link elements between them maybe with properties (like oriented). It would be good also to be able to see the concrete links.

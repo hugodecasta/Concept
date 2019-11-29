@@ -46,41 +46,58 @@ body {
     z-index: 2;
 }
 
-.concept:hover {
-    cursor: pointer;
-}
-
 .concept .conceptData{
     display: none;
+    opacity: 0;
     pointer-events: none;
 }
 
 .concept.selected .conceptData{
     display: block;
+    opacity: 1;
     pointer-events: all;
 }
 
 /* ---------- */
 
 .conceptName {
-    position: relative;
-    font-size: 40px;
+    position: absolute;
     border-radius: 1000px;
-    width:230px;
-    height:230px;
+
+    top:57.5px;
+    left:57.5px;
+    width:115px;
+    height:115px;
+
     text-align: center;
-    transform: scale(0.5);
     background: #ff0015;
     transition: all 0.2s;
     z-index:1;
 }
 
+.conceptName:hover {
+    cursor:pointer;
+}
+
 .concept.selected .conceptName {
-    transform: scale(1);
+    top:0px;
+    left:0px;
+    width:230px;
+    height:230px;
 }
 
 .conceptName span {
     position: absolute;
+    font-size: 20px;
+    top:46px;
+    left:0px;
+    width:115px;
+    transition: all 0.2s;
+}
+
+.concept.selected .conceptName span {
+    position: absolute;
+    font-size: 40px;
     top:95px;
     left:0px;
     width:230px;
@@ -92,13 +109,24 @@ body {
     position: relative;
     margin-left:-70px;
     height:auto;
-    margin-top: -50px;
+    margin-top: 140px;
     overflow:hidden;
     background: rgba(255,255,255,0.5);
     box-shadow: 0px 0px 50px rgba(255,255,255);
     border-radius: 70px;
     transition: opacity 0.1s;
+    transition: all 0.2s;
     z-index:0;
+}
+
+.concept.selected .conceptData {
+    margin-top: 170px;
+    animation: appear 0.2s;
+}
+
+@keyframes appear {
+    0%{opacity:0;margin-top: 140px;}
+    100%{opacity:1;margin-top: 170px;}
 }
 
 .conceptData > div {

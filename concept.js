@@ -1,5 +1,12 @@
 'use strict'
 
+function help() {
+    console.log('x','delete selected')
+    console.log('c','conceptualize')
+    console.log('enter','create keyword')
+    console.log('i','create info')
+}
+
 // -------------------------------------------------------------------------------- DATA
 
 var bm = new BoolMaster('boolMaster/api.php')

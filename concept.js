@@ -14,45 +14,46 @@ var GX_concepts = {}
 
 // -------------------------------------------------------------------------------- DATA INFO
 
-function get_selected(item_name) {
-    return localStorage.getItem(item_name)
+async function get_selected(item_name) {
+    if(! await bm.key_exists('selected'))
+        await bm.write_key('selected',{})
+    let selected = await bm.read_key('selected')
+    if(!selected.hasOwnProperty(item_name))
+        return null
+    return selected[item_name]
 }
 
-function set_selected(item_name, selected) {
-    if(selected == null) {
-        localStorage.removeItem(item_name)
-        return
-    }
-    localStorage.setItem(item_name,selected)
+async function set_selected(item_name, value) {
+    let selected = await bm.read_key('selected')
+    selected[item_name] = value
+    await bm.write_key('selected',selected)
 }
 
-function set_selected_caps(type,cap_name) {
-    set_selected('caps_type',type)
-    set_selected('caps',cap_name)
+async function set_selected_caps(type,cap_name) {
+    await set_selected('caps_type',type)
+    await set_selected('caps',cap_name)
 }
 
 async function get_selected_concept() {
-    let name = get_selected('selected_concept')
-    if(name == null)
-        return null
-    return await get_concept(name)
+    let concept = await get_selected('selected_concept')
+    return concept
 }
 
-function set_selected_concept(concept_name) {
-    set_selected('selected_concept',concept_name)
+async function set_selected_concept(concept) {
+    await set_selected('selected_concept',concept)
 }
 
-function get_GX_track() {
-    let retr = localStorage.getItem('GX_track')
+async function get_GX_track() {
+    let retr = await get_selected('GX_track')
     if(retr == null) {
-        set_GX_track({})
+        await set_GX_track({})
         return get_GX_track()
     }
-    return JSON.parse(retr)
+    return retr
 }
 
-function set_GX_track(GX_track) {
-    localStorage.setItem('GX_track',JSON.stringify(GX_track))
+async function set_GX_track(GX_track) {
+    await set_selected('GX_track',GX_track)
 }
 
 // -------------------------------------------------------------------------------- HANDLERS
@@ -79,23 +80,31 @@ var key_actions = {
         let concept = await get_selected_concept()
         if(concept == null)
             return null
+        if(concept.keywords.length == 10) {
+            alert('Enought keywords')
+            return
+        }
         let keyword = prompt('keyword','')
         if(keyword == null)
             return null
         concept.keywords.push(keyword)
         await set_concept(concept)
-        set_selected_caps('keyword',keyword)
+        await set_selected_caps('keyword',keyword)
     },
     'KeyI':async function() {
         let concept = await get_selected_concept()
         if(concept == null)
             return null
+        if(concept.infos.length == 9) {
+            alert('Enought infos')
+            return
+        }
         let info = prompt('info','')
         if(info == null)
             return null
         concept.infos.push(info)
         await set_concept(concept)
-        set_selected_caps('info',info)
+        await set_selected_caps('info',info)
     },
     'KeyC':async function() {
         let concept = await get_selected_concept()
@@ -110,7 +119,7 @@ var key_actions = {
                 return null
             }
             await set_concept(cor_concept)
-            set_selected_concept(cor_concept.name)
+            await set_selected_concept(cor_concept)
         } else {
             select_concept(cor_concept.name)
         }
@@ -135,6 +144,7 @@ async function get_concepts() {
 
 async function save_concepts(concept) {
     await bm.write_key('concepts',concept)
+    await bm.trigger_checker('concepts')
 }
 
 async function set_concept(concept) {
@@ -172,23 +182,24 @@ function GX_create_caps(indata, type) {
     let caps_GX = $('<div>').addClass(type+' caps')
     .html(indata)
 
-    if(get_selected('caps_type') == type && get_selected('caps') == indata)
-        caps_GX.addClass('selected')
+    async function manage_selection() {
+        if(await get_selected('caps_type') == type && await get_selected('caps') == indata)
+            caps_GX.addClass('selected')
+    }
+    manage_selection()
 
-    caps_GX.click(function(){
+    caps_GX.click(async function(){
         let was_selected = caps_GX.hasClass('selected')
         for(let kwgx of $.find('.caps.selected')) {
             $(kwgx).removeClass('selected')
         }
         if(was_selected) {
             caps_GX.removeClass('selected')
-            set_selected('caps_type',null)
-            set_selected('caps',null)
+            await set_selected_caps(null,null)
         }
         else {
             caps_GX.addClass('selected')
-            set_selected('caps_type',type)
-            set_selected('caps',indata)
+            await set_selected_caps(type,indata)
         }
     })
 
@@ -219,21 +230,15 @@ function GX_create_concept(concept) {
 
     let innib = false
 
-    let concept_GX = $('<div>').addClass('concept').draggable({
-        stop: function() {
-            let left = concept_GX.css('left')
-            let top = concept_GX.css('top')
-            let gxt = get_GX_track()
-            gxt[concept_name] = {left:left,top:top}
-            set_GX_track(gxt)
-            innib = true
-        }
-    })
+    let concept_GX = $('<div>').addClass('concept')
 
-    let gxt = get_GX_track()
-    if(gxt.hasOwnProperty(concept_name)) {
-        concept_GX.css(gxt[concept_name])
+    async function ret_gtx() {
+        let gxt = await get_GX_track()
+        if(gxt.hasOwnProperty(concept_name)) {
+            concept_GX.css(gxt[concept_name])
+        }   
     }
+    ret_gtx()
 
     let name_GX = GX_create_concept_name(concept_name)
     let data_GX = $('<div>').addClass('conceptData')
@@ -243,6 +248,21 @@ function GX_create_concept(concept) {
 
     data_GX.append(infos_GX).append(keywords_GX)
     concept_GX.append(name_GX,data_GX)
+    
+    concept_GX.draggable({
+        handle:name_GX,
+        stop: async function() {
+            async function save_gxt() {
+                let left = concept_GX.css('left')
+                let top = concept_GX.css('top')
+                let gxt = await get_GX_track()
+                gxt[concept_name] = {left:left,top:top}
+                await set_GX_track(gxt)
+            }
+            save_gxt()
+            innib = true
+        }
+    })
 
     for(let info of infos)
         infos_GX.append(GX_create_info(info))
@@ -256,14 +276,13 @@ function GX_create_concept(concept) {
         if(pre_selected != null)
             unselect_concept(pre_selected.name)
         concept_GX.addClass('selected')
-        set_selected_concept(concept_name)
+        await set_selected_concept(concept)
     }
 
-    function unselect_method() {
+    async function unselect_method() {
         concept_GX.removeClass('selected')
-        set_selected_concept(null)
-        set_selected('caps_type',null)
-        set_selected('caps',null)
+        await set_selected_concept(null)
+        await set_selected_caps(null,null)
         $('.caps.selected').removeClass('selected')
     }
 
@@ -339,7 +358,7 @@ async function main() {
                 let concept = prompt_new_concept(keyword,'')
                 if(concept == null)
                     return null
-                set_selected_concept(keyword)
+                await set_selected_concept(keyword)
                 await set_concept(concept)
             })
             $('.concepts').append(concept_GX)

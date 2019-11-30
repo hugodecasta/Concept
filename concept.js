@@ -13,13 +13,11 @@ var bm = new BoolMaster('boolMaster/api.php')
 var gsi = new GoogleSignIn()
 var GX_concepts = {}
 
-var associated_keys = ['']
-
 // -------------------------------------------------------------------------------- DATA INFO
 
 async function get_selected(item_name) {
     if(! await bm.key_exists(item_name))
-        await bm.write_key(item_name,null)
+        return null
     return await bm.read_key(item_name)
 }
 
@@ -101,15 +99,15 @@ async function set_selected_info(info) {
 
 var key_actions = {
     'KeyX':async function() {
-        let work = await get_selected_work()
-        if(work != null) {
-            if(confirm('Do you realy want to remove "'+work.name+'"'))
-                await remove_work(work)
+        let concept = await get_selected_concept()
+        if(concept == null){
+            let work = await get_selected_work()
+            if(work != null) {
+                if(confirm('Do you realy want to remove "'+work.name+'"'))
+                    await remove_work(work)
+            }
             return
         }
-        let concept = await get_selected_concept()
-        if(concept == null)
-            return null
         let keyword = await get_selected_keyword()
         let info = await get_selected_info()
         if(keyword == null && info==null) {
@@ -136,6 +134,8 @@ var key_actions = {
     'Enter':async function() {
         let work = await get_selected_work()
         if(work != null) {
+            list_btn.unbind('click')
+            list_btn.removeClass('center')
             await set_current_work(work.name)
             draw_concepts(work)
             return
@@ -217,13 +217,22 @@ async function set_work(work_name, work_description) {
 }
 
 async function remove_work(work) {
-    let old_prefix = bm.get_prefix()
 
     await set_work_prefix(work)
-    await bm.key_remove(get_concept_name())
-    await bm.key_remove('selected')
 
-    bm.set_prefix(old_prefix)
+    if(await bm.key_exists(get_concept_name()))
+        await bm.key_remove(get_concept_name())
+    if(await bm.key_exists('keyword'))
+        await bm.key_remove('keyword')
+    if(await bm.key_exists('info'))
+        await bm.key_remove('info')
+    if(await bm.key_exists('selected_concept'))
+        await bm.key_remove('selected_concept')
+    if(await bm.key_exists('GX_track'))
+        await bm.key_remove('GX_track')
+
+    await set_profile_prefix()
+
     let works = await get_work_list()
     delete works[work.name]
     await bm.write_key('works',works)
@@ -549,7 +558,6 @@ async function init_updater(createBtn) {
     
         let selected = await get_selected_concept()
         if(selected != null) {
-            console.log('selected = ',selected)
             await select_concept(selected.name)
         }
     })
@@ -591,10 +599,11 @@ async function draw_work_list() {
     await set_current_work(null)
 
     list_btn.click(async function() {
-        let work = prompt('work name','')
-        if(work == null)
+        let workname = prompt('work name','')
+        if(workname == null)
             return null
-        await set_work(work,'')
+        await set_selected_work(workname)
+        await set_work(workname,'')
     })
 
     await get_work_list()
@@ -609,10 +618,6 @@ async function draw_work_list() {
             let work = works[name]
             let gx = GX_create_work(work)
             $('.concepts').append(gx)
-            gx.click(async function() {
-                list_btn.unbind('click')
-                list_btn.removeClass('center')
-            })
         }
     })
 

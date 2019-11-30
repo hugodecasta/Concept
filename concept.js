@@ -25,6 +25,43 @@ async function set_selected(item_name, value) {
     await bm.write_key(item_name,value)
 }
 
+async function set_link(from_keyword, to_keyword) {
+    let linker = await get_selected('linker')
+    if(linker == null)
+        linker = {}
+    linker[from_keyword] = to_keyword
+    await set_selected('linker',linker)
+}
+
+async function get_link(keyword) {
+    let linker = await get_selected('linker')
+    if(linker == null)
+        return null
+    if(!linker.hasOwnProperty(keyword))
+        return null
+    return linker[keyword]
+}
+
+async function get_reverse_link(to_keyword) {
+    let linker = await get_selected('linker')
+    let ret = []
+    for(let from_keyword in linker) {
+        if(linker[from_keyword] == to_keyword)
+            ret.push(from_keyword)
+    }
+    return ret
+}
+
+async function remove_link(from_keyword) {
+    let linker = await get_selected('linker')
+    if(typeof(from_keyword) == typeof([])) {
+        for(let key of from_keyword)
+            delete linker[key]
+    }
+    delete linker[from_keyword]
+    await set_selected('linker',linker)
+}
+
 async function get_selected_concept() {
     let concept_name = await get_selected('selected_concept')
     if(concept_name == null)
@@ -176,16 +213,14 @@ var key_actions = {
         let keyword = await get_selected_keyword()
         if(concept == null || keyword == null)
             return null
-        let cor_concept = await get_concept(keyword)
-        if(cor_concept == null) {
-            cor_concept = prompt_new_concept(keyword)
-            if(cor_concept == null) {
-                return null
-            }
-            await set_selected_concept(cor_concept)
-            await set_concept(cor_concept)
+        let new_concept = await prompt_new_concept(keyword)
+        if(new_concept == null) {
+            return null
+        } else if (concept_is_a_link(new_concept)) {
+            await select_concept(new_concept)
         } else {
-            await select_concept(cor_concept.name)
+            await set_selected_concept(new_concept)
+            await set_concept(new_concept)
         }
     }
 }
@@ -230,6 +265,8 @@ async function remove_work(work) {
         await bm.key_remove('selected_concept')
     if(await bm.key_exists('GX_track'))
         await bm.key_remove('GX_track')
+    if(await bm.key_exists('linker'))
+        await bm.key_remove('linker')
 
     await set_profile_prefix()
 
@@ -277,9 +314,15 @@ async function get_concept(name) {
 }
 
 async function remove_concept(name) {
+    let linked = await get_reverse_link(name)
+    await remove_link(linked)
     let concepts = await get_concepts()
     delete concepts[name]
     await save_concepts(concepts)
+}
+
+function concept_is_a_link(concept) {
+    return typeof(concept) == typeof('')
 }
 
 // -------------------------------------------------------------------------------- GX
@@ -447,10 +490,25 @@ function GX_create_concept(concept) {
 
 }
 
-function prompt_new_concept(name, url='') {
+async function prompt_new_concept(name, url='', use_link=true) {
+
+    if(use_link) {
+        let name_linked = await get_link(name)
+        if(name_linked != null) {
+            return name_linked
+        }
+    }
+
     let concept_name = prompt('concept name',name)
     if(concept_name == null)
         return null
+    let cname_linked = await get_link(concept_name)
+    if(cname_linked != null) {
+        await set_link(name, cname_linked)
+        return cname_linked
+    }
+    await set_link(name, concept_name)
+    await set_link(concept_name, concept_name)
     let concept_url = prompt('concept url',url)
     if(concept_url == null)
         return null
@@ -643,11 +701,15 @@ async function draw_concepts(work) {
     let createBtn = $('<div>').addClass('createBtn roundBtn')
     $('.options').append(createBtn)
     createBtn.click(async function() {
-        let concept = prompt_new_concept('New Concept')
+        let concept = await prompt_new_concept('Concept','',false)
         if(concept == null)
             return null
-        await set_selected_concept(concept)
-        await set_concept(concept)
+        if(concept_is_a_link(concept)) {
+            select_concept(concept)
+        } else {
+            await set_selected_concept(concept)
+            await set_concept(concept)
+        }
     })
 
     await init_updater(createBtn)

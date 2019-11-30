@@ -507,11 +507,11 @@ async function prompt_new_concept(name, url='', use_link=true) {
         await set_link(name, cname_linked)
         return cname_linked
     }
-    await set_link(name, concept_name)
-    await set_link(concept_name, concept_name)
     let concept_url = prompt('concept url',url)
     if(concept_url == null)
         return null
+    await set_link(name, concept_name)
+    await set_link(concept_name, concept_name)
     let concept = {
         name:concept_name,
         url:concept_url,

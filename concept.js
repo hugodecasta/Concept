@@ -10,6 +10,7 @@ function help() {
 // -------------------------------------------------------------------------------- DATA
 
 var bm = new BoolMaster('boolMaster/api.php')
+var gsi = new GoogleSignIn()
 var GX_concepts = {}
 
 // -------------------------------------------------------------------------------- DATA INFO
@@ -24,14 +25,10 @@ async function get_selected(item_name) {
 }
 
 async function set_selected(item_name, value) {
+    await get_selected(item_name)
     let selected = await bm.read_key('selected')
     selected[item_name] = value
     await bm.write_key('selected',selected)
-}
-
-async function set_selected_caps(type,cap_name) {
-    await set_selected('caps_type',type)
-    await set_selected('caps',cap_name)
 }
 
 async function get_selected_concept() {
@@ -61,10 +58,59 @@ async function set_GX_track(GX_track) {
     await set_selected('GX_track',GX_track)
 }
 
+async function get_current_work() {
+    let work_name = await get_selected('current_work')
+    if(work_name == null)
+        return work_name
+    return (await get_work_list())[work_name]
+}
+
+async function set_current_work(work_name) {
+    await set_selected('current_work',work_name)
+}
+
+function get_concept_name() {
+    return 'concepts'
+}
+
+async function get_selected_work() {
+    let work_name = await get_selected('work')
+    if(work_name == null)
+        return work_name
+    return (await get_work_list())[work_name]
+}
+
+async function set_selected_work(workname) {
+    await set_selected('work',workname)
+}
+
+async function get_selected_keyword() {
+    return await get_selected('keyword')
+}
+
+async function set_selected_keyword(keyword) {
+    await set_selected('keyword',keyword)
+}
+
+async function get_selected_info(keyword) {
+    return await get_selected('info',info)
+}
+
+async function set_selected_info(info) {
+    await set_selected('info',info)
+}
+
+
 // -------------------------------------------------------------------------------- HANDLERS
 
 var key_actions = {
     'KeyX':async function() {
+        let work = await get_selected_work()
+        if(work != null) {
+            if(confirm('Do you realy want to remove "'+work.name+'"'))
+                await remove_work(work)
+            return
+        }
         let concept = await get_selected_concept()
         if(concept == null)
             return null
@@ -81,7 +127,19 @@ var key_actions = {
             await set_concept(concept)
         }
     },
+    'KeyL':async function() {
+        let concept = await get_selected_concept()
+        if(concept == null)
+            return null
+        window.open(concept.url, '_blank');
+    },
     'Enter':async function() {
+        let work = await get_selected_work()
+        if(work != null) {
+            await set_current_work(work.name)
+            draw_concepts(work)
+            return
+        }
         let concept = await get_selected_concept()
         if(concept == null)
             return null
@@ -94,7 +152,7 @@ var key_actions = {
             return null
         concept.keywords.push(keyword)
         await set_concept(concept)
-        await set_selected_caps('keyword',keyword)
+        await set_selected_keyword(keyword)
     },
     'KeyI':async function() {
         let concept = await get_selected_concept()
@@ -109,7 +167,7 @@ var key_actions = {
             return null
         concept.infos.push(info)
         await set_concept(concept)
-        await set_selected_caps('info',info)
+        await set_selected_info(info)
     },
     'KeyC':async function() {
         let concept = await get_selected_concept()
@@ -138,18 +196,61 @@ $(document).keypress(async function(e) {
     await key_actions[code]()
 })
 
+// -------------------------------------------------------------------------------- WORKS
+
+async function get_work_list() {
+    if(! await bm.key_exists('works')) {
+        await bm.write_key('works',{})
+    }
+    return await bm.read_key('works')
+}
+
+async function set_work(work_name, work_description) {
+    let works = await get_work_list()
+    let work = {
+        name:work_name,
+        description:work_description
+    }
+    works[work_name] = work
+    await bm.write_key('works',works)
+}
+
+async function remove_work(work) {
+    let old_prefix = bm.get_prefix()
+
+    await set_work_prefix(work)
+    await bm.key_remove(get_concept_name())
+    await bm.key_remove('selected')
+
+    bm.set_prefix(old_prefix)
+    let works = await get_work_list()
+    delete works[work.name]
+    await bm.write_key('works',works)
+}
+
+async function set_work_prefix(work) {
+    let profile = await gsi.get_profile_data()
+    bm.set_prefix(profile.id+work.name)
+}
+
+async function set_profile_prefix() {
+    let profile = await gsi.get_profile_data()
+    bm.set_prefix(profile.id)
+}
+
 // -------------------------------------------------------------------------------- CONCEPTS
 
 async function get_concepts() {
-    if(! await bm.key_exists('concepts')) {
+    if(! await bm.key_exists(get_concept_name())) {
         await save_concepts({})
     }
-    return await bm.read_key('concepts')
+    let concepts = await bm.read_key(get_concept_name())
+    return concepts
 }
 
 async function save_concepts(concept) {
-    await bm.write_key('concepts',concept)
-    await bm.trigger_checker('concepts')
+    await bm.write_key(get_concept_name(),concept)
+    await bm.trigger_checker(get_concept_name())
 }
 
 async function set_concept(concept) {
@@ -200,11 +301,11 @@ function GX_create_caps(indata, type) {
         }
         if(was_selected) {
             caps_GX.removeClass('selected')
-            await set_selected_caps(null,null)
+            await set_selected(type,null)
         }
         else {
             caps_GX.addClass('selected')
-            await set_selected_caps(type,indata)
+            await set_selected(type,indata)
         }
     })
 
@@ -289,7 +390,8 @@ function GX_create_concept(concept) {
     async function unselect_method() {
         concept_GX.removeClass('selected')
         await set_selected_concept(null)
-        await set_selected_caps(null,null)
+        await set_selected_keyword(null)
+        await set_selected_info(null)
         $('.caps.selected').removeClass('selected')
     }
 
@@ -302,9 +404,6 @@ function GX_create_concept(concept) {
             unselect_method()
         } else {
             select_method()
-        }
-        if(e!=undefined && e.ctrlKey) {
-            window.open(concept.url, '_blank');
         }
     })
 
@@ -334,9 +433,31 @@ function prompt_new_concept(name, url='') {
     return concept
 }
 
+function GX_create_profile_elements(profile) {
+
+    let disconnect_btn = $('<div>').addClass('user_btn roundBtn')
+    .css('background-image','url("'+profile.image_url+'")')
+
+    disconnect_btn.click(async function(){
+        await gsi.disconnect()
+        location.reload()
+    })
+
+    let elements = {
+        disconnect_btn:disconnect_btn
+    }
+    return elements
+}
+
+function GX_create_work(work) {
+    let gx = GX_create_caps(work.name,'work')
+    return gx
+}
+
 // -------------------------------------------------------------------------------- UPDATERS
 
 var concept_checkers = {}
+var updid = null
 
 function register_concept_checker(concept_name,callback) {
 
@@ -356,7 +477,7 @@ function register_concept_checker(concept_name,callback) {
     launch_cb()
 }
 
-function init_updater(createBtn) {
+async function init_updater(createBtn) {
 
     async function init_concept(concept) {
         let concept_GX = GX_create_concept(concept,async function(keyword){
@@ -382,7 +503,9 @@ function init_updater(createBtn) {
         }
     }
 
-    bm.register_checker('concepts',async function(concepts) {
+    await get_concepts()
+    await stop_updater()
+    updid = await bm.register_checker(get_concept_name(),async function(concepts) {
         update_add_btn(concepts)
         for(let name in concepts) {
             let concept = concepts[name]
@@ -408,14 +531,86 @@ function init_updater(createBtn) {
 
 }
 
+async function stop_updater() {
+    await bm.unregister_checker(updid)
+    concept_checkers = {}
+}
+
 // -------------------------------------------------------------------------------- CORE
 
-async function main() {
+async function setup_user_profile() {
 
-    $('.options').html('')
+    await gsi.init_api('1070660703362-s25lhmm8qb29cf0j8bgae19cbp7f8eou.apps.googleusercontent.com')
+    let signin_btn = gsi.get_JQ_button().css('display','none')
+    setTimeout(function(){
+        signin_btn.css('display','block')
+    },2000)
+    $('.options').append(signin_btn)
+    let profile = await gsi.get_profile_data()
+    signin_btn.remove()
+    return profile
+}
+
+async function open_work(work_name) {
+    await set_selected
+}
+
+// --------------------
+
+var work_list_reg_id = null
+var list_btn = null
+
+async function draw_work_list() {
+
+    await set_profile_prefix()
+    await set_current_work(null)
+
+    list_btn.click(async function() {
+        let work = prompt('work name','')
+        if(work == null)
+            return null
+        await set_work(work,'')
+    })
+
+    await get_work_list()
+    await bm.unregister_checker(work_list_reg_id)
+    work_list_reg_id = await bm.register_checker('works',function(works) {
+        $('.concepts').html('')
+        if(Object.keys(works).length == 0)
+            list_btn.addClass('center')
+        else
+            list_btn.removeClass('center')
+        for(let name in works) {
+            let work = works[name]
+            let gx = GX_create_work(work)
+            $('.concepts').append(gx)
+            gx.click(async function() {
+                list_btn.unbind('click')
+                list_btn.removeClass('center')
+            })
+        }
+    })
+
+    bm.trigger_checker('works')
+}
+
+async function draw_concepts(work) {
+
+    await bm.unregister_checker(work_list_reg_id)
+    await set_work_prefix(work)
+
     $('.concepts').html('')
 
-    let createBtn = $('<div>').addClass('createBtn')
+    list_btn.addClass('right')
+    list_btn.click(async function() {
+        list_btn.unbind('click')
+        list_btn.removeClass('right')
+        createBtn.remove()
+        await stop_updater()
+        draw_work_list()
+    })
+
+    let createBtn = $('<div>').addClass('createBtn roundBtn')
     $('.options').append(createBtn)
     createBtn.click(async function() {
         let concept = prompt_new_concept('New Concept')
@@ -424,7 +619,33 @@ async function main() {
         await set_concept(concept)
     })
 
-    init_updater(createBtn)
+    await init_updater(createBtn)
+}
+
+// --------------------
+
+async function main() {
+
+    $('.options').html('')
+    $('.concepts').html('')
+
+    let profile = await setup_user_profile()
+
+    let gx_prof_elms = GX_create_profile_elements(profile)
+    $('.options').append(gx_prof_elms.disconnect_btn)
+
+    list_btn = $('<div>').addClass('listBtn roundBtn')
+    $('.options').append(list_btn)
+
+    await set_profile_prefix()
+    let current_work = await get_current_work()
+    console.log(current_work)
+
+    if(current_work == null) {
+        draw_work_list()
+    } else {
+        draw_concepts(current_work)
+    }
 }
 
 main()

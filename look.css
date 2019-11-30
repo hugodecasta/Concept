@@ -10,6 +10,7 @@ body {
 
 .concepts {
     margin-top: 70px;
+    overflow: hidden;
 }
 
 /* ------------------------------------------------- */
@@ -224,6 +225,11 @@ body {
 @keyframes appear {
     0%{opacity:0;margin-top: 140px;}
     100%{opacity:1;margin-top: 170px;}
+}
+
+@keyframes concept_disap {
+    0%{opacity:1;transform:scale(1);}
+    100%{opacity:0;transform:scale(0.9);}
 }
 
 .conceptData > div {

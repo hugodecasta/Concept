@@ -115,6 +115,7 @@ var key_actions = {
         if(keyword == null && info==null) {
             if(! confirm('do you really want to remove "'+concept.name+'"'))
                 return
+            await set_selected_concept(null)
             await remove_concept(concept.name)
         } else {
             let array = keyword==null?'infos':'keywords'
@@ -181,10 +182,10 @@ var key_actions = {
             if(cor_concept == null) {
                 return null
             }
-            await set_concept(cor_concept)
             await set_selected_concept(cor_concept)
+            await set_concept(cor_concept)
         } else {
-            select_concept(cor_concept.name)
+            await select_concept(cor_concept.name)
         }
     }
 }
@@ -274,17 +275,12 @@ async function remove_concept(name) {
 
 // -------------------------------------------------------------------------------- GX
 
-function select_concept(concept_name) {
-    GX_concepts[concept_name].select()
+async function select_concept(concept_name) {
+    await GX_concepts[concept_name].select()
 }
 
-function unselect_concept(concept_name) {
-    GX_concepts[concept_name].unselect()
-}
-
-function select_keyword(concept,keyword) {
-    let con = GX_concepts[concept.name]
-    con.keywords[keyword].select()
+async function unselect_concept(concept_name) {
+    await GX_concepts[concept_name].unselect()
 }
 
 // -------------------------------------------------------------------------------- GX**
@@ -366,7 +362,15 @@ function GX_create_concept(concept) {
     data_GX.append(infos_GX).append(keywords_GX)
     concept_GX.append(name_GX,data_GX)
 
-    register_concept_checker(concept_name,function(new_concept) {
+    register_concept_checker(concept_name,function(new_concept,still_here) {
+        if(!still_here) {
+            concept_GX.css('animation','concept_disap 0.3s')
+            setTimeout(function(){
+                concept_GX.remove()
+            },300)
+            
+            return
+        }
         let infos = new_concept.infos
         let keywords = new_concept.keywords
         infos_GX.html('')
@@ -393,10 +397,14 @@ function GX_create_concept(concept) {
     })
 
     async function select_method(e) {
-        let pre_selected = await get_selected_concept()
-        if(pre_selected != null && pre_selected.name != concept_name)
-            unselect_concept(pre_selected.name)
+        for(let concGX of $('.concept.selected')) {
+            $(concGX).removeClass('selected')
+        }
         concept_GX.addClass('selected')
+        let pre_selected = await get_selected_concept()
+        if(pre_selected != null && pre_selected.name != concept_name) {
+            await unselect_concept(pre_selected.name)
+        }
         await set_selected_concept(concept)
     }
 
@@ -485,7 +493,7 @@ function register_concept_checker(concept_name,callback) {
     
     async function launch_cb() {
         let concept = await get_concept(concept_name)
-        callback(concept)
+        callback(concept,true)
     }
     launch_cb()
 }
@@ -493,18 +501,7 @@ function register_concept_checker(concept_name,callback) {
 async function init_updater(createBtn) {
 
     async function init_concept(concept) {
-        let concept_GX = GX_create_concept(concept,async function(keyword){
-            let concepts = await get_concepts()
-            if(concepts.hasOwnProperty(keyword)) {
-                select_concept(keyword)
-                return
-            }
-            let concept = prompt_new_concept(keyword,'')
-            if(concept == null)
-                return null
-            await set_selected_concept(keyword)
-            await set_concept(concept)
-        })
+        let concept_GX = GX_create_concept(concept)
         $('.concepts').append(concept_GX)
     }
 
@@ -531,15 +528,30 @@ async function init_updater(createBtn) {
                 let callbacks = checker.callbacks
                 if(last_data != new_data) {
                     for(let cb of callbacks)
-                        cb(concept)
+                        cb(concept,true)
                 }
                 checker.last_data = new_data
             }
         }
+
+        let to_delete = []
+        for(let check_name in concept_checkers) {
+            if(!concepts.hasOwnProperty(check_name)) {
+                let callbacks = concept_checkers[check_name].callbacks
+                for(let cb of callbacks)
+                    cb(null,false)
+                to_delete.push(check_name)
+            }
+        }
+
+        for(let name of to_delete)
+            delete concept_checkers[name]
     
         let selected = await get_selected_concept()
-        if(selected != null)
-            select_concept(selected.name)
+        if(selected != null) {
+            console.log('selected = ',selected)
+            await select_concept(selected.name)
+        }
     })
 
 }
@@ -629,6 +641,7 @@ async function draw_concepts(work) {
         let concept = prompt_new_concept('New Concept')
         if(concept == null)
             return null
+        await set_selected_concept(concept)
         await set_concept(concept)
     })
 

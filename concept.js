@@ -13,22 +13,18 @@ var bm = new BoolMaster('boolMaster/api.php')
 var gsi = new GoogleSignIn()
 var GX_concepts = {}
 
+var associated_keys = ['']
+
 // -------------------------------------------------------------------------------- DATA INFO
 
 async function get_selected(item_name) {
-    if(! await bm.key_exists('selected'))
-        await bm.write_key('selected',{})
-    let selected = await bm.read_key('selected')
-    if(!selected.hasOwnProperty(item_name))
-        return null
-    return selected[item_name]
+    if(! await bm.key_exists(item_name))
+        await bm.write_key(item_name,null)
+    return await bm.read_key(item_name)
 }
 
 async function set_selected(item_name, value) {
-    await get_selected(item_name)
-    let selected = await bm.read_key('selected')
-    selected[item_name] = value
-    await bm.write_key('selected',selected)
+    await bm.write_key(item_name,value)
 }
 
 async function get_selected_concept() {
@@ -92,8 +88,8 @@ async function set_selected_keyword(keyword) {
     await set_selected('keyword',keyword)
 }
 
-async function get_selected_info(keyword) {
-    return await get_selected('info',info)
+async function get_selected_info() {
+    return await get_selected('info')
 }
 
 async function set_selected_info(info) {
@@ -114,16 +110,19 @@ var key_actions = {
         let concept = await get_selected_concept()
         if(concept == null)
             return null
-        let caps_type = await get_selected('caps_type')
-        let caps = await get_selected('caps')
-        if(caps_type == null) {
+        let keyword = await get_selected_keyword()
+        let info = await get_selected_info()
+        if(keyword == null && info==null) {
             if(! confirm('do you really want to remove "'+concept.name+'"'))
                 return
             await remove_concept(concept.name)
         } else {
-            let array = caps_type=='info'?'infos':'keywords'
-            let index = concept[array].indexOf(caps)
+            let array = keyword==null?'infos':'keywords'
+            let type = keyword==null?'info':'keyword'
+            let word = keyword==null?info:keyword
+            let index = concept[array].indexOf(word)
             concept[array].splice(index,1)
+            await set_selected(type,null)
             await set_concept(concept)
         }
     },
@@ -151,8 +150,9 @@ var key_actions = {
         if(keyword == null)
             return null
         concept.keywords.push(keyword)
-        await set_concept(concept)
+        await set_selected_info(null)
         await set_selected_keyword(keyword)
+        await set_concept(concept)
     },
     'KeyI':async function() {
         let concept = await get_selected_concept()
@@ -166,14 +166,14 @@ var key_actions = {
         if(info == null)
             return null
         concept.infos.push(info)
-        await set_concept(concept)
         await set_selected_info(info)
+        await set_selected_keyword(null)
+        await set_concept(concept)
     },
     'KeyC':async function() {
         let concept = await get_selected_concept()
-        let caps_type = await get_selected('caps_type')
-        let keyword = await get_selected('caps')
-        if(concept == null || keyword == null || caps_type != 'keyword')
+        let keyword = await get_selected_keyword()
+        if(concept == null || keyword == null)
             return null
         let cor_concept = await get_concept(keyword)
         if(cor_concept == null) {
@@ -282,6 +282,11 @@ function unselect_concept(concept_name) {
     GX_concepts[concept_name].unselect()
 }
 
+function select_keyword(concept,keyword) {
+    let con = GX_concepts[concept.name]
+    con.keywords[keyword].select()
+}
+
 // -------------------------------------------------------------------------------- GX**
 
 function GX_create_caps(indata, type) {
@@ -289,12 +294,14 @@ function GX_create_caps(indata, type) {
     .html(indata)
 
     async function manage_selection() {
-        if(await get_selected('caps_type') == type && await get_selected('caps') == indata)
+        let selected_name = await get_selected(type)
+        if(selected_name == indata)
             caps_GX.addClass('selected')
     }
     manage_selection()
 
     caps_GX.click(async function(){
+
         let was_selected = caps_GX.hasClass('selected')
         for(let kwgx of $.find('.caps.selected')) {
             $(kwgx).removeClass('selected')
@@ -314,11 +321,17 @@ function GX_create_caps(indata, type) {
 
 function GX_create_info(info) {
     let info_GX = GX_create_caps(info, 'info')
+    info_GX.click(function(){
+        set_selected_keyword(null)
+    })
     return info_GX
 }
 
 function GX_create_keyword(keyword) {
     let keyword_GX = GX_create_caps(keyword, 'keyword')
+    keyword_GX.click(function(){
+        set_selected_info(null)
+    })
     return keyword_GX
 }
 
@@ -381,7 +394,7 @@ function GX_create_concept(concept) {
 
     async function select_method(e) {
         let pre_selected = await get_selected_concept()
-        if(pre_selected != null)
+        if(pre_selected != null && pre_selected.name != concept_name)
             unselect_concept(pre_selected.name)
         concept_GX.addClass('selected')
         await set_selected_concept(concept)
@@ -639,7 +652,6 @@ async function main() {
 
     await set_profile_prefix()
     let current_work = await get_current_work()
-    console.log(current_work)
 
     if(current_work == null) {
         draw_work_list()

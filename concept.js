@@ -10,8 +10,68 @@ function help() {
 // -------------------------------------------------------------------------------- DATA
 
 var bm = new BoolMaster('boolMaster/api.php')
+var helpme = new HelpMe('hugocastaneda_concept_app')
 var gsi = new GoogleSignIn()
 var GX_concepts = {}
+
+function setup_helpme() {
+    helpme.queue_help_event('create work',{
+        title:'your work',
+        description:'click the button to create a new work',
+        jq:'list_btn'
+    })
+    helpme.queue_help_event('enter work',{
+        title:'get in !',
+        description:'enter your work space by pressing "enter"',
+        jq:'work_caps'
+    })
+    helpme.queue_help_event('create concept',{
+        title:'your first concept',
+        description:'click and create a concept ...',
+        jq:'create_concept_btn'
+    })
+    helpme.queue_help_event('create info',{
+        title:'info',
+        description:'you can add a information by pressing "i"',
+        jq:'concept_btn'
+    })
+    helpme.queue_help_event('delete info',{
+        title:'delete the info',
+        description:'now delete the info by pressing "x"',
+        jq:'concept_btn'
+    })
+    helpme.queue_help_event('create keyword',{
+        title:'keyword',
+        description:'you can add a keyword by pressing "enter"',
+        jq:'concept_btn'
+    })
+    helpme.queue_help_event('conceptualize',{
+        title:'conceptualization...',
+        description:'you can create a concept from the keyword using "c"',
+        jq:'keyword'
+    })
+    helpme.queue_help_event('delete concept',{
+        title:'delete the concept',
+        description:'now you can delete the concept by pressing "x"',
+        jq:'concept_btn'
+    })
+    helpme.queue_help_event('work list',{
+        title:'back to the work list',
+        description:'click to go back to the work list',
+        jq:'list_btn'
+    })
+    helpme.queue_help_event('delete work',{
+        title:'delete me !',
+        description:'delete the work by pressing "x"',
+        jq:'work_caps'
+    })
+    helpme.queue_help_event('have fun',{
+        title:'have fun',
+        description:'good luck with you work !',
+        jq:'list_btn'
+    })
+    helpme.queue_help_event('ending', null)
+}
 
 // -------------------------------------------------------------------------------- DATA INFO
 
@@ -416,6 +476,7 @@ function GX_create_concept(concept) {
 
     register_concept_checker(concept_name,function(new_concept,still_here) {
         if(!still_here) {
+            helpme.trigger_queue(['work list'])
             concept_GX.css('animation','concept_disap 0.3s')
             setTimeout(function(){
                 concept_GX.remove()
@@ -427,10 +488,18 @@ function GX_create_concept(concept) {
         let keywords = new_concept.keywords
         infos_GX.html('')
         keywords_GX.html('')
-        for(let info of infos)
-            infos_GX.append(GX_create_info(info))
-        for(let keyword of keywords)
-            keywords_GX.append(GX_create_keyword(keyword))
+        for(let info of infos) {
+            let infogx = GX_create_info(info)
+            infos_GX.append(infogx)
+        }
+        for(let keyword of keywords) {
+            let keywordgx = GX_create_keyword(keyword)
+            keywords_GX.append(keywordgx)
+            helpme.register_jq('keyword',keywordgx)
+        }
+
+        helpme.register_jq('concept_btn',name_GX)
+        helpme.trigger_queue(['create info','delete info','create keyword','conceptualize','delete concept'])
     })
     
     concept_GX.draggable({
@@ -656,12 +725,16 @@ async function draw_work_list() {
     await set_profile_prefix()
     await set_current_work(null)
 
+    helpme.register_jq('list_btn',list_btn)
+    helpme.trigger_queue(['create work'])
+
     list_btn.click(async function() {
         let workname = prompt('work name','')
         if(workname == null)
             return null
         await set_selected_work(workname)
         await set_work(workname,'')
+        helpme.trigger_queue(['ending'])
     })
 
     await get_work_list()
@@ -670,13 +743,17 @@ async function draw_work_list() {
         $('.concepts').html('')
         if(Object.keys(works).length == 0)
             list_btn.addClass('center')
-        else
+        else {
             list_btn.removeClass('center')
+        }
+        let helpset = false
         for(let name in works) {
             let work = works[name]
             let gx = GX_create_work(work)
             $('.concepts').append(gx)
+            helpme.register_jq('work_caps',gx)
         }
+        helpme.trigger_queue(['enter work','delete work','have fun'])
     })
 
     bm.trigger_checker('works')
@@ -690,6 +767,7 @@ async function draw_concepts(work) {
     $('.concepts').html('')
 
     list_btn.addClass('right')
+    helpme.register_jq('list_btn',list_btn)
     list_btn.click(async function() {
         list_btn.unbind('click')
         list_btn.removeClass('right')
@@ -700,6 +778,8 @@ async function draw_concepts(work) {
 
     let createBtn = $('<div>').addClass('createBtn roundBtn')
     $('.options').append(createBtn)
+    helpme.register_jq('create_concept_btn',createBtn)
+    helpme.trigger_queue(['create concept','work list'])
     createBtn.click(async function() {
         let concept = await prompt_new_concept('Concept','',false)
         if(concept == null)
@@ -718,6 +798,8 @@ async function draw_concepts(work) {
 // --------------------
 
 async function main() {
+
+    setup_helpme()
 
     $('.options').html('')
     $('.concepts').html('')

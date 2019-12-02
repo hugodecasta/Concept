@@ -4,3 +4,6 @@
 [submodule "GoogleSignInJS"]
 	path = GoogleSignInJS
 	url = https://github.com/hugodecasta/GoogleSignInJS.git
+[submodule "helpme"]
+	path = helpme
+	url = https://github.com/hugodecasta/helpme

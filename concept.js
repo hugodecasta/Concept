@@ -202,15 +202,17 @@ async function set_selected_info(info) {
 
 var show_link = false
 var cached_linker = {}
+var cache_int = null
 
 var key_actions = {
     's':async function() {
         show_link = !show_link
         if(!show_link) {
+            clearInterval(cache_int)
             canvas.set_update_method(null)
             return
         }
-        setInterval(async function(){
+        cache_int = setInterval(async function(){
             cached_linker = await get_linker()
         },100)
         canvas.set_update_method(function(){

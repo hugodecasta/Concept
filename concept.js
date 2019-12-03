@@ -12,6 +12,8 @@ function help() {
 var bm = new BoolMaster('boolMaster/api.php')
 var helpme = new HelpMe('hugocastaneda_concept_app')
 var gsi = new GoogleSignIn()
+var canvas = new SubCanvas()
+
 var GX_concepts = {}
 
 function setup_helpme() {
@@ -93,8 +95,12 @@ async function set_link(from_keyword, to_keyword) {
     await set_selected('linker',linker)
 }
 
+async function get_linker() {
+    return await get_selected('linker')
+}
+
 async function get_link(keyword) {
-    let linker = await get_selected('linker')
+    let linker = await get_linker()
     if(linker == null)
         return null
     if(!linker.hasOwnProperty(keyword))
@@ -103,7 +109,7 @@ async function get_link(keyword) {
 }
 
 async function get_reverse_link(to_keyword) {
-    let linker = await get_selected('linker')
+    let linker = await get_linker()
     let ret = []
     for(let from_keyword in linker) {
         if(linker[from_keyword] == to_keyword)
@@ -113,7 +119,7 @@ async function get_reverse_link(to_keyword) {
 }
 
 async function remove_link(from_keyword) {
-    let linker = await get_selected('linker')
+    let linker = await get_linker()
     if(typeof(from_keyword) == typeof([])) {
         for(let key of from_keyword)
             delete linker[key]
@@ -194,7 +200,47 @@ async function set_selected_info(info) {
 
 // -------------------------------------------------------------------------------- HANDLERS
 
+var show_link = false
+var cached_linker = {}
+
 var key_actions = {
+    's':async function() {
+        show_link = !show_link
+        if(!show_link) {
+            canvas.set_update_method(null)
+            return
+        }
+        setInterval(async function(){
+            cached_linker = await get_linker()
+        },100)
+        canvas.set_update_method(function(){
+            let links = cached_linker
+            canvas.clear()
+            for(let name in GX_concepts) {
+                let gx = GX_concepts[name].gx
+                let fromx = gx.offset().left+gx.outerWidth()/2
+                let fromy = gx.offset().top+gx.outerHeight()/2
+                let keywords = GX_concepts[name].keywords
+                for(let keyword in keywords) {
+                    if(GX_concepts[name].selected) {
+                        gx = keywords[keyword]
+                        fromx = gx.offset().left+gx.outerWidth()-2
+                        fromy = gx.offset().top+gx.outerHeight()/2
+                    }
+                    if(links.hasOwnProperty(keyword) && GX_concepts.hasOwnProperty(links[keyword])) {
+                        let togx = GX_concepts[links[keyword]].gx
+                        let tox = togx.offset().left+togx.outerWidth()/2
+                        let toy = togx.offset().top+togx.outerHeight()/2
+                        var gradient = canvas.ctx.createLinearGradient(fromx,fromy,tox,toy);
+                        gradient.addColorStop(0, '#00CAB6');
+                        gradient.addColorStop(0.5, '#ff0015');
+                        canvas.stroke(gradient)
+                        canvas.curve(fromx,fromy,fromx+(tox-fromx)*1.1,fromy+(toy-fromy)/2,tox,toy)
+                    }
+                }
+            }
+        })
+    },
     'x':async function() {
         let concept = await get_selected_concept()
         if(concept == null){
@@ -513,11 +559,14 @@ function GX_create_concept(concept) {
             let infogx = GX_create_info(info)
             infos_GX.append(infogx)
         }
+        let keywords_gx = {}
         for(let keyword of keywords) {
             let keywordgx = GX_create_keyword(keyword)
             keywords_GX.append(keywordgx)
             helpme.register_jq('keyword',keywordgx)
+            keywords_gx[keyword] = keywordgx
         }
+        GX_concepts[concept_name].keywords = keywords_gx
 
         helpme.register_jq('concept_btn',name_GX)
         helpme.trigger_queue(['create info','delete info','create keyword','conceptualize','delete concept'])
@@ -547,11 +596,13 @@ function GX_create_concept(concept) {
         if(pre_selected != null && pre_selected.name != concept_name) {
             await unselect_concept(pre_selected.name)
         }
+        GX_concepts[concept_name].selected = true
         await set_selected_concept(concept)
     }
 
     async function unselect_method() {
         concept_GX.removeClass('selected')
+        GX_concepts[concept_name].selected = false
         await set_selected_concept(null)
         await set_selected_keyword(null)
         await set_selected_info(null)
@@ -573,7 +624,9 @@ function GX_create_concept(concept) {
     GX_concepts[concept_name] = {
         select:select_method,
         unselect:unselect_method,
-        selected:false
+        selected:false,
+        gx:name_GX,
+        keywords:{}
     }
 
     return concept_GX

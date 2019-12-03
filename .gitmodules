@@ -7,3 +7,6 @@
 [submodule "helpme"]
 	path = helpme
 	url = https://github.com/hugodecasta/helpme
+[submodule "SubCanvas"]
+	path = SubCanvas
+	url = https://github.com/hugodecasta/SubCanvas.git

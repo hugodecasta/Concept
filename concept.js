@@ -195,7 +195,7 @@ async function set_selected_info(info) {
 // -------------------------------------------------------------------------------- HANDLERS
 
 var key_actions = {
-    'KeyX':async function() {
+    'x':async function() {
         let concept = await get_selected_concept()
         if(concept == null){
             let work = await get_selected_work()
@@ -222,7 +222,7 @@ var key_actions = {
             await set_concept(concept)
         }
     },
-    'KeyL':async function() {
+    'l':async function() {
         let concept = await get_selected_concept()
         if(concept == null)
             return null
@@ -245,14 +245,14 @@ var key_actions = {
             return
         }
         let keyword = prompt('keyword','')
-        if(keyword == null)
+        if(keyword == null || keyword == '')
             return null
         concept.keywords.push(keyword)
         await set_selected_info(null)
         await set_selected_keyword(keyword)
         await set_concept(concept)
     },
-    'KeyI':async function() {
+    'i':async function() {
         let concept = await get_selected_concept()
         if(concept == null)
             return null
@@ -261,14 +261,14 @@ var key_actions = {
             return
         }
         let info = prompt('info','')
-        if(info == null)
+        if(info == null || info == '')
             return null
         concept.infos.push(info)
         await set_selected_info(info)
         await set_selected_keyword(null)
         await set_concept(concept)
     },
-    'KeyC':async function() {
+    'c':async function() {
         let concept = await get_selected_concept()
         let keyword = await get_selected_keyword()
         if(concept == null || keyword == null)
@@ -282,14 +282,35 @@ var key_actions = {
             await set_selected_concept(new_concept)
             await set_concept(new_concept)
         }
+    },
+    'm':async function() {
+        let concept = await get_selected_concept()
+        if(concept == null)
+            return
+        let keyword = await get_selected_keyword()
+        let info = await get_selected_info()
+        if(keyword == null && info == null)
+            return
+        if(keyword == null) {
+            concept.keywords.push(info)
+            concept.infos.splice(concept.infos.indexOf(info))
+            await set_selected_info(null)
+            await set_selected_keyword(info)
+        } else {
+            concept.infos.push(keyword)
+            concept.keywords.splice(concept.keywords.indexOf(keyword))
+            await set_selected_info(keyword)
+            await set_selected_keyword(null)
+        }
+        await set_concept(concept)
     }
 }
 
 $(document).keypress(async function(e) {
-    let code = e.originalEvent.code
-    if(!key_actions.hasOwnProperty(code))
+    let key = e.originalEvent.key
+    if(!key_actions.hasOwnProperty(key))
         return
-    await key_actions[code]()
+    await key_actions[key]()
 })
 
 // -------------------------------------------------------------------------------- WORKS

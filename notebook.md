@@ -22,9 +22,11 @@ This is now done by
 
 ---
 ## New ideas about associations
- * Show links between concepts or create visual cluster automaticaly `[ TODO ]`
+ * Show links between concepts or create visual cluster automaticaly `[ DONE ]`
 
 Using canvas one could show the links between concepts. It would be good too to propose a concepts placement in space based on this linking. It would be good to be able to see the importance of concepts based on their links.
+
+One can show and hide links between concepts by pressing "s".
 
  * Create story telling system `[ TODO ]`
 

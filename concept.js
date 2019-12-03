@@ -197,51 +197,72 @@ async function set_selected_info(info) {
     await set_selected('info',info)
 }
 
+async function get_link_show() {
+    return await get_selected('link_show')
+}
 
-// -------------------------------------------------------------------------------- HANDLERS
+async function set_link_show(link_show) {
+    await set_selected('link_show',link_show)
+}
 
-var show_link = false
+
+// -------------------------------------------------------------------------------- LINK SHOW
+
 var cached_linker = {}
 var cache_int = null
 
-var key_actions = {
-    's':async function() {
-        show_link = !show_link
-        if(!show_link) {
-            clearInterval(cache_int)
-            canvas.set_update_method(null)
-            return
-        }
-        cache_int = setInterval(async function(){
-            cached_linker = await get_linker()
-        },100)
-        canvas.set_update_method(function(){
-            let links = cached_linker
-            canvas.clear()
-            for(let name in GX_concepts) {
-                let gx = GX_concepts[name].gx
-                let fromx = gx.offset().left+gx.outerWidth()/2
-                let fromy = gx.offset().top+gx.outerHeight()/2
-                let keywords = GX_concepts[name].keywords
-                for(let keyword in keywords) {
-                    if(GX_concepts[name].selected) {
-                        gx = keywords[keyword]
-                        fromx = gx.offset().left+gx.outerWidth()-2
-                        fromy = gx.offset().top+gx.outerHeight()/2
-                    }
-                    if(links.hasOwnProperty(keyword) && GX_concepts.hasOwnProperty(links[keyword])) {
-                        let togx = GX_concepts[links[keyword]].gx
-                        let tox = togx.offset().left+togx.outerWidth()/2
-                        let toy = togx.offset().top+togx.outerHeight()/2
-                        var gradient = canvas.ctx.createLinearGradient(fromx,fromy,tox,toy);
-                        gradient.addColorStop(0, '#00CAB6');
-                        gradient.addColorStop(0.5, '#ff0015');
-                        canvas.stroke(gradient)
-                        canvas.curve(fromx,fromy,fromx+(tox-fromx)*1.1,fromy+(toy-fromy)/2,tox,toy)
-                    }
+function show_link() {
+    cache_int = setInterval(async function(){
+        cached_linker = await get_linker()
+    },100)
+    canvas.set_update_method(function(){
+        let links = cached_linker
+        canvas.clear()
+        for(let name in GX_concepts) {
+            let gx = GX_concepts[name].gx
+            let fromx = gx.offset().left+gx.outerWidth()/2
+            let fromy = gx.offset().top+gx.outerHeight()/2
+            let keywords = GX_concepts[name].keywords
+            for(let keyword in keywords) {
+                if(GX_concepts[name].selected) {
+                    gx = keywords[keyword]
+                    fromx = gx.offset().left+gx.outerWidth()-2
+                    fromy = gx.offset().top+gx.outerHeight()/2
+                }
+                if(links.hasOwnProperty(keyword) && GX_concepts.hasOwnProperty(links[keyword])) {
+                    let togx = GX_concepts[links[keyword]].gx
+                    let tox = togx.offset().left+togx.outerWidth()/2
+                    let toy = togx.offset().top+togx.outerHeight()/2
+                    var gradient = canvas.ctx.createLinearGradient(fromx,fromy,tox,toy);
+                    gradient.addColorStop(0, '#00CAB6');
+                    gradient.addColorStop(0.5, '#ff0015');
+                    canvas.stroke(gradient)
+                    canvas.curve(fromx,fromy,fromx+(tox-fromx)*1.1,fromy+(toy-fromy)/2,tox,toy)
                 }
             }
-        })
+        }
+    })
+}
+
+function hide_link() {
+    clearInterval(cache_int)
+    canvas.set_update_method(null)
+}
+
+
+// -------------------------------------------------------------------------------- HANDLERS
+
+var key_actions = {
+    's':async function() {
+        let show_link_rel = await get_link_show()
+        show_link_rel = !show_link_rel
+        if(!show_link_rel) {
+            hide_link()
+            await set_link_show(false)
+            return
+        }
+        await set_link_show(true)
+        show_link()
     },
     'x':async function() {
         let concept = await get_selected_concept()
@@ -396,6 +417,8 @@ async function remove_work(work) {
         await bm.key_remove('GX_track')
     if(await bm.key_exists('linker'))
         await bm.key_remove('linker')
+    if(await bm.key_exists('link_show'))
+        await bm.key_remove('link_show')
 
     await set_profile_prefix()
 
@@ -800,6 +823,7 @@ async function draw_work_list() {
 
     await set_profile_prefix()
     await set_current_work(null)
+    hide_link()
 
     helpme.register_jq('list_btn',list_btn)
     helpme.trigger_queue(['create work'])
@@ -841,6 +865,9 @@ async function draw_concepts(work) {
     await set_work_prefix(work)
 
     $('.concepts').html('')
+
+    if(await get_link_show() === true)
+        show_link()
 
     list_btn.addClass('right')
     helpme.register_jq('list_btn',list_btn)

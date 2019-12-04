@@ -16,6 +16,8 @@ var canvas = new SubCanvas()
 
 var GX_concepts = {}
 
+// -------------------------------------------------------------------------------- HELP
+
 function setup_helpme() {
     helpme.queue_help_event('create work',{
         title:'your work',
@@ -69,10 +71,40 @@ function setup_helpme() {
     })
     helpme.queue_help_event('have fun',{
         title:'have fun',
-        description:'good luck with you work !',
+        description:'press "h" for help !',
         jq:'list_btn'
     })
     helpme.queue_help_event('ending', null)
+}
+
+function draw_help_panel() {
+    helpme.trigger_queue(['ending'])
+    helpme.help_panel({
+        'buttons':{
+            'user button':'click to disconnect',
+            'blue button':{
+                'when in work list':'add a new work',
+                'when in concept work':'go back to the work list',
+            },
+            'red button':'add a new concept to the current work',
+        },
+        'keys':{
+            'h': 'toggle help panel on and off',
+            'Enter': {
+                'on a work selection':'enter the selected work',
+                'on a concept selection':'create a "keyword" caps',
+            },
+            'x': {
+                'on a work selection':'delete the selected work',
+                'on a concept selection':'delete the selected concept',
+                'on a keyword/info selection':'delete the select caps',
+            },
+            'i': 'add an "info" caps to the selected concept',
+            's':'toggle link show on and off',
+            'c':'conceptualize the selected keyword (create a concept)',
+            'm':'move the keyword to an info and vice-versa'
+        }
+    })
 }
 
 // -------------------------------------------------------------------------------- DATA INFO
@@ -253,6 +285,9 @@ function hide_link() {
 // -------------------------------------------------------------------------------- HANDLERS
 
 var key_actions = {
+    'h':function() {
+        draw_help_panel()
+    },
     's':async function() {
         let show_link_rel = await get_link_show()
         show_link_rel = !show_link_rel
@@ -834,7 +869,6 @@ async function draw_work_list() {
             return null
         await set_selected_work(workname)
         await set_work(workname,'')
-        helpme.trigger_queue(['ending'])
     })
 
     await get_work_list()

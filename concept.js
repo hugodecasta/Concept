@@ -104,6 +104,7 @@ function draw_help_panel() {
             'c':'conceptualize the selected keyword (create a concept)',
             'm':'move the keyword to an info and vice-versa',
             'l':'open the selected concept\'s link',
+            'ctrl':'display next semantic concept from selected concept'
         }
     })
 }

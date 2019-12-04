@@ -102,7 +102,8 @@ function draw_help_panel() {
             'i': 'add an "info" caps to the selected concept',
             's':'toggle link show on and off',
             'c':'conceptualize the selected keyword (create a concept)',
-            'm':'move the keyword to an info and vice-versa'
+            'm':'move the keyword to an info and vice-versa',
+            'l':'open the selected concept\'s link',
         }
     })
 }

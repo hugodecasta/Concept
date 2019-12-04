@@ -238,6 +238,46 @@ async function set_link_show(link_show) {
     await set_selected('link_show',link_show)
 }
 
+// -------------------------------------------------------------------------------- STORY
+
+var story_tree = null
+
+async function create_story_tree() {
+    story_tree = []
+    let linker = await get_linker()
+    let concepts = await get_concepts()
+    function append_story_tree(concept) {
+        let links_to_add = []
+        for(let keyword of concept.keywords) {
+            if(linker.hasOwnProperty(keyword) && story_tree.indexOf(linker[keyword]) == -1) {
+                links_to_add.push(linker[keyword])
+            }
+        }
+        for(let i=0;i<links_to_add.length;++i) {
+            story_tree.push(links_to_add[i])
+            let to_concept = concepts[links_to_add[i]]
+            append_story_tree(to_concept)
+            if(i < links_to_add.length-1)
+                story_tree.push(concept.name)
+        }
+    }
+    let concept = await get_selected_concept()
+    append_story_tree(concept)
+}
+
+function reset_story_tree() {
+    story_tree = null
+}
+
+async function story_get_next_concept_name() {
+    if(story_tree == null)
+        await create_story_tree()
+    if(story_tree.length == 0)
+        return null
+    let next_concept_name = story_tree[0]
+    story_tree.splice(0,1)
+    return next_concept_name
+}
 
 // -------------------------------------------------------------------------------- LINK SHOW
 
@@ -408,14 +448,25 @@ var key_actions = {
             await set_selected_keyword(null)
         }
         await set_concept(concept)
+    },
+    'Control':async function() {
+        let concept = await get_selected_concept()
+        if(concept == null)
+            return
+        let next_concept_name = await story_get_next_concept_name()
+        if(next_concept_name == null) {
+            unselect_concept(concept.name)
+            return
+        }
+        select_concept(next_concept_name)
     }
 }
 
-$(document).keypress(async function(e) {
+$(document).keydown(async function(e) {
     let key = e.originalEvent.key
     if(!key_actions.hasOwnProperty(key))
         return
-    await key_actions[key]()
+    await key_actions[key](e)
 })
 
 // -------------------------------------------------------------------------------- WORKS
@@ -671,6 +722,7 @@ function GX_create_concept(concept) {
     }
 
     name_GX.click(function(e) {
+        reset_story_tree()
         if(innib) {
             innib = false
             return

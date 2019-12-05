@@ -479,17 +479,20 @@ async function get_work_list() {
     return await bm.read_key('works')
 }
 
-async function set_work(work_name, work_description) {
+async function set_work(work_name, work_description, work_shared) {
     let works = await get_work_list()
     let work = {
         name:work_name,
-        description:work_description
+        description:work_description,
+        shared:work_shared,
     }
     works[work_name] = work
     await bm.write_key('works',works)
 }
 
 async function remove_work(work) {
+
+    let old_prefix_data = bm.prefix_data
 
     await set_work_prefix(work)
 
@@ -508,19 +511,41 @@ async function remove_work(work) {
     if(await bm.key_exists('link_show'))
         await bm.key_remove('link_show')
 
-    await set_profile_prefix()
+    bm.prefix_data = old_prefix_data
 
     let works = await get_work_list()
     delete works[work.name]
     await bm.write_key('works',works)
 }
 
+// -------------------------------------------------------------------------------- PREFIX
+
+async function set_share_prefix() {
+    bm.reset_prefix()
+    bm.set_prefix('share')
+}
 async function set_work_prefix(work) {
+    bm.reset_prefix()
     let profile = await gsi.get_profile_data()
-    bm.set_prefix(profile.id+work.name)
+    if(!work.shared) {
+        bm.set_prefix(profile.id+work.name)
+        return 
+    }
+    let share_prefix = 'share'+work.name
+    let shared_user_prefix = 'share'+profile.id+work.name
+
+    bm.set_prefix(share_prefix,get_concept_name())
+    bm.set_prefix(share_prefix,'GX_track')
+    bm.set_prefix(share_prefix,'linker')
+
+    bm.set_prefix(shared_user_prefix,'keyword')
+    bm.set_prefix(shared_user_prefix,'info')
+    bm.set_prefix(shared_user_prefix,'selected_concept')
+    bm.set_prefix(shared_user_prefix,'link_show')
 }
 
 async function set_profile_prefix() {
+    bm.reset_prefix()
     let profile = await gsi.get_profile_data()
     bm.set_prefix(profile.id)
 }
@@ -637,14 +662,6 @@ function GX_create_concept(concept) {
 
     let concept_GX = $('<div>').addClass('concept')
 
-    async function ret_gtx() {
-        let gxt = await get_GX_track()
-        if(gxt.hasOwnProperty(concept_name)) {
-            concept_GX.css(gxt[concept_name])
-        }   
-    }
-    ret_gtx()
-
     let name_GX = GX_create_concept_name(concept_name)
     let data_GX = $('<div>').addClass('conceptData')
 
@@ -654,7 +671,7 @@ function GX_create_concept(concept) {
     data_GX.append(infos_GX).append(keywords_GX)
     concept_GX.append(name_GX,data_GX)
 
-    register_concept_checker(concept_name,function(new_concept,still_here) {
+    register_concept_checker(concept_name,function(new_concept,still_here,moves=null) {
         if(!still_here) {
             helpme.trigger_queue(['work list'])
             concept_GX.css('animation','concept_disap 0.3s')
@@ -662,6 +679,12 @@ function GX_create_concept(concept) {
                 concept_GX.remove()
             },300)
             
+            return
+        }
+        if(new_concept == null) {
+            if(moves == null)
+                return
+            concept_GX.css(moves)
             return
         }
         let infos = new_concept.infos
@@ -803,12 +826,14 @@ function GX_create_work(work) {
 
 var concept_checkers = {}
 var updid = null
+var moveupid = null
 
 function register_concept_checker(concept_name,callback) {
 
     if(!concept_checkers.hasOwnProperty(concept_name)) {
         let checker = {
             last_data:'',
+            last_move:'',
             callbacks:[]
         }
         concept_checkers[concept_name] = checker
@@ -817,7 +842,7 @@ function register_concept_checker(concept_name,callback) {
     
     async function launch_cb() {
         let concept = await get_concept(concept_name)
-        callback(concept,true)
+        callback(concept,true,null)
     }
     launch_cb()
 }
@@ -852,7 +877,7 @@ async function init_updater(createBtn) {
                 let callbacks = checker.callbacks
                 if(last_data != new_data) {
                     for(let cb of callbacks)
-                        cb(concept,true)
+                        cb(concept,true,null)
                 }
                 checker.last_data = new_data
             }
@@ -877,6 +902,23 @@ async function init_updater(createBtn) {
         }
     })
 
+    await get_GX_track()
+    moveupid = await bm.register_checker('GX_track',async function(moves) {
+        for(let name in moves) {
+            if(!concept_checkers.hasOwnProperty(name))
+                return
+            let checker = concept_checkers[name]
+            let last_move = checker.last_move
+            let new_move = JSON.stringify(moves[name])
+            let callbacks = checker.callbacks
+            if(last_move != new_move) {
+                for(let cb of callbacks)
+                    cb(null,true,moves[name])
+            }
+            concept_checkers[name].last_move = new_move
+        }
+    })
+
 }
 
 async function stop_updater() {
@@ -884,7 +926,7 @@ async function stop_updater() {
     concept_checkers = {}
 }
 
-// -------------------------------------------------------------------------------- CORE
+// -------------------------------------------------------------------------------- USER
 
 async function setup_user_profile() {
 
@@ -899,46 +941,68 @@ async function setup_user_profile() {
     return profile
 }
 
-async function open_work(work_name) {
-    await set_selected
-}
-
-// --------------------
+// -------------------------------------------------------------------------------- DRAW
 
 var work_list_reg_id = null
 var list_btn = null
+var share_btn = null
 
-async function draw_work_list() {
+// -------------------------------------------------------------
 
-    await set_profile_prefix()
+async function draw_work_list(share_list=false) {
+
+    if(share_list)
+        await set_share_prefix()
+    else
+        await set_profile_prefix()
+
     await set_current_work(null)
     hide_link()
 
     helpme.register_jq('list_btn',list_btn)
     helpme.trigger_queue(['create work'])
 
-    list_btn.click(async function() {
+    let work_btn = share_list?share_btn:list_btn
+    let latent_btn = share_list?list_btn:share_btn
+
+    work_btn.css('display','block')
+    work_btn.click(async function() {
         let workname = prompt('work name','')
         if(workname == null)
             return null
         await set_selected_work(workname)
-        await set_work(workname,'')
+        await set_work(workname,'',share_list)
     })
+    latent_btn.css('display','block')
+    latent_btn.addClass('right')
+    latent_btn.removeClass('center')
+    latent_btn.click(async function() {
+        latent_btn.unbind('click')
+        work_btn.unbind('click')
+        latent_btn.removeClass('right')
+        await bm.unregister_checker(work_list_reg_id)
+        draw_work_list(!share_list)
+    })
+    
+
+    let work_class = share_list?'shared':''
 
     await get_work_list()
     await bm.unregister_checker(work_list_reg_id)
     work_list_reg_id = await bm.register_checker('works',function(works) {
+        console.log('coucou')
         $('.concepts').html('')
         if(Object.keys(works).length == 0)
-            list_btn.addClass('center')
+            work_btn.addClass('center')
         else {
-            list_btn.removeClass('center')
+            work_btn.removeClass('center')
         }
         let helpset = false
         for(let name in works) {
             let work = works[name]
             let gx = GX_create_work(work)
             $('.concepts').append(gx)
+            gx.addClass(work_class)
             helpme.register_jq('work_caps',gx)
         }
         helpme.trigger_queue(['enter work','delete work','have fun'])
@@ -947,9 +1011,10 @@ async function draw_work_list() {
     bm.trigger_checker('works')
 }
 
+// -------------------------------------------------------------
+
 async function draw_concepts(work) {
 
-    await bm.unregister_checker(work_list_reg_id)
     await set_work_prefix(work)
 
     $('.concepts').html('')
@@ -965,6 +1030,15 @@ async function draw_concepts(work) {
         createBtn.remove()
         await stop_updater()
         draw_work_list()
+    })
+    share_btn.addClass('right')
+    helpme.register_jq('list_btn',list_btn)
+    share_btn.click(async function() {
+        share_btn.unbind('click')
+        share_btn.removeClass('right')
+        createBtn.remove()
+        await stop_updater()
+        draw_work_list(true)
     })
 
     let createBtn = $('<div>').addClass('createBtn roundBtn')
@@ -986,7 +1060,9 @@ async function draw_concepts(work) {
     await init_updater(createBtn)
 }
 
-// --------------------
+// -------------------------------------------------------------
+
+// -------------------------------------------------------------------------------- CORE
 
 async function main() {
 
@@ -1002,6 +1078,9 @@ async function main() {
 
     list_btn = $('<div>').addClass('listBtn roundBtn')
     $('.options').append(list_btn)
+
+    share_btn = $('<div>').addClass('shareBtn roundBtn')
+    $('.options').append(share_btn)
 
     await set_profile_prefix()
     let current_work = await get_current_work()

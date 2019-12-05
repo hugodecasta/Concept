@@ -288,7 +288,7 @@ var cache_int = null
 function show_link() {
     cache_int = setInterval(async function(){
         cached_linker = await get_linker()
-    },100)
+    },500)
     canvas.set_update_method(function(){
         let links = cached_linker
         canvas.clear()
@@ -479,7 +479,7 @@ async function get_work_list() {
     return await bm.read_key('works')
 }
 
-async function set_work(work_name, work_description, work_shared) {
+async function set_work(work_name, work_description, work_shared=false) {
     let works = await get_work_list()
     let work = {
         name:work_name,
@@ -520,28 +520,11 @@ async function remove_work(work) {
 
 // -------------------------------------------------------------------------------- PREFIX
 
-async function set_share_prefix() {
-    bm.reset_prefix()
-    bm.set_prefix('share')
-}
 async function set_work_prefix(work) {
     bm.reset_prefix()
     let profile = await gsi.get_profile_data()
-    if(!work.shared) {
-        bm.set_prefix(profile.id+work.name)
-        return 
-    }
-    let share_prefix = 'share'+work.name
-    let shared_user_prefix = 'share'+profile.id+work.name
-
-    bm.set_prefix(share_prefix,get_concept_name())
-    bm.set_prefix(share_prefix,'GX_track')
-    bm.set_prefix(share_prefix,'linker')
-
-    bm.set_prefix(shared_user_prefix,'keyword')
-    bm.set_prefix(shared_user_prefix,'info')
-    bm.set_prefix(shared_user_prefix,'selected_concept')
-    bm.set_prefix(shared_user_prefix,'link_show')
+    bm.set_prefix(profile.id+work.name)
+    return
 }
 
 async function set_profile_prefix() {
@@ -842,7 +825,9 @@ function register_concept_checker(concept_name,callback) {
     
     async function launch_cb() {
         let concept = await get_concept(concept_name)
+        let gx_track = await get_GX_track()
         callback(concept,true,null)
+        callback(null,true,gx_track[concept.name])
     }
     launch_cb()
 }
@@ -908,14 +893,9 @@ async function init_updater(createBtn) {
             if(!concept_checkers.hasOwnProperty(name))
                 return
             let checker = concept_checkers[name]
-            let last_move = checker.last_move
-            let new_move = JSON.stringify(moves[name])
             let callbacks = checker.callbacks
-            if(last_move != new_move) {
-                for(let cb of callbacks)
-                    cb(null,true,moves[name])
-            }
-            concept_checkers[name].last_move = new_move
+            for(let cb of callbacks)
+                cb(null,true,moves[name])
         }
     })
 
@@ -945,16 +925,12 @@ async function setup_user_profile() {
 
 var work_list_reg_id = null
 var list_btn = null
-var share_btn = null
 
 // -------------------------------------------------------------
 
-async function draw_work_list(share_list=false) {
+async function draw_work_list() {
 
-    if(share_list)
-        await set_share_prefix()
-    else
-        await set_profile_prefix()
+    await set_profile_prefix()
 
     await set_current_work(null)
     hide_link()
@@ -962,47 +938,28 @@ async function draw_work_list(share_list=false) {
     helpme.register_jq('list_btn',list_btn)
     helpme.trigger_queue(['create work'])
 
-    let work_btn = share_list?share_btn:list_btn
-    let latent_btn = share_list?list_btn:share_btn
-
-    work_btn.css('display','block')
-    work_btn.click(async function() {
+    list_btn.css('display','block')
+    list_btn.click(async function() {
         let workname = prompt('work name','')
         if(workname == null)
             return null
         await set_selected_work(workname)
-        await set_work(workname,'',share_list)
+        await set_work(workname,'')
     })
-    latent_btn.css('display','block')
-    latent_btn.addClass('right')
-    latent_btn.removeClass('center')
-    latent_btn.click(async function() {
-        latent_btn.unbind('click')
-        work_btn.unbind('click')
-        latent_btn.removeClass('right')
-        await bm.unregister_checker(work_list_reg_id)
-        draw_work_list(!share_list)
-    })
-    
-
-    let work_class = share_list?'shared':''
 
     await get_work_list()
     await bm.unregister_checker(work_list_reg_id)
     work_list_reg_id = await bm.register_checker('works',function(works) {
-        console.log('coucou')
         $('.concepts').html('')
         if(Object.keys(works).length == 0)
-            work_btn.addClass('center')
+            list_btn.addClass('center')
         else {
-            work_btn.removeClass('center')
+            list_btn.removeClass('center')
         }
-        let helpset = false
         for(let name in works) {
             let work = works[name]
             let gx = GX_create_work(work)
             $('.concepts').append(gx)
-            gx.addClass(work_class)
             helpme.register_jq('work_caps',gx)
         }
         helpme.trigger_queue(['enter work','delete work','have fun'])
@@ -1016,6 +973,7 @@ async function draw_work_list(share_list=false) {
 async function draw_concepts(work) {
 
     await set_work_prefix(work)
+    await bm.unregister_checker(work_list_reg_id)
 
     $('.concepts').html('')
 
@@ -1031,15 +989,7 @@ async function draw_concepts(work) {
         await stop_updater()
         draw_work_list()
     })
-    share_btn.addClass('right')
     helpme.register_jq('list_btn',list_btn)
-    share_btn.click(async function() {
-        share_btn.unbind('click')
-        share_btn.removeClass('right')
-        createBtn.remove()
-        await stop_updater()
-        draw_work_list(true)
-    })
 
     let createBtn = $('<div>').addClass('createBtn roundBtn')
     $('.options').append(createBtn)
@@ -1078,9 +1028,6 @@ async function main() {
 
     list_btn = $('<div>').addClass('listBtn roundBtn')
     $('.options').append(list_btn)
-
-    share_btn = $('<div>').addClass('shareBtn roundBtn')
-    $('.options').append(share_btn)
 
     await set_profile_prefix()
     let current_work = await get_current_work()

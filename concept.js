@@ -291,6 +291,8 @@ function show_link() {
     },500)
     canvas.set_update_method(function(){
         let links = cached_linker
+        if(links == null)
+            return
         canvas.clear()
         for(let name in GX_concepts) {
             let gx = GX_concepts[name].gx

@@ -28,7 +28,7 @@ Using canvas one could show the links between concepts. It would be good too to 
 
 One can show and hide links between concepts by pressing "s".
 
- * Create story telling system `[ TODO ]`
+ * Create story telling system `[ DONE ]`
 
 One good idea would be to create a story telling system with which one can follow the concept path by pressing ctrl and go forward with the telling. Each time one press the ctrl key it jump to the "next" concept from a pre-determined list. This list could be created by a simple algo making it retrieavable on the flight every time.
 
@@ -43,3 +43,24 @@ One can now move info to keyword and vice-verso by using the "m" key (as move)
 Create a simple visual tutoriel telling the user which key to press for what reason. Maybe create an alternate git project ... !
 
 The project is now uses the "helpme" submodule allowing to create a tutorial for begginners
+
+---
+## Sharing work
+
+A greate idea would be the possibility to share work with other people. Two options:
+ * Share with every one (work part of a global array)
+ * Share with specific users
+   * this would require to store all user data in a global array to allow for sharing
+   * or we can generate random one time url to share with invited users that they can use and it will generate a sharing token ... (let's see later)
+
+If we work with user identification, it is needed to create a hashable more secure way to share to google user id.
+
+Sharing can be done by changing the BM prefix to "share" for example and the whole js will access to the same keys but on the "share" namespace. We just need, when activating the "draw_concept" method to activate the share prefix instead of user+work prefix. OR we can modify the profile prefix to be "share".
+
+One problem though, when selecting a concept or keyword for example, it will select it for everyone working on the project. This is a problem. We need to be able to select which key will be connected to which prefix and which will be checked for update. Maybe allow BM to record custom prefix per key !
+
+It is now possible to share work but all shared work are public shared work which mean that every one can see your work and act on it and everyone can delete it ...
+
+### next step
+ * share work with wanted user
+ * remember the shared work you were working on !

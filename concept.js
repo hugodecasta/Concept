@@ -15,6 +15,7 @@ var gsi = new GoogleSignIn()
 var canvas = new SubCanvas()
 
 var GX_concepts = {}
+var working = false
 
 // -------------------------------------------------------------------------------- HELP
 
@@ -126,6 +127,10 @@ async function set_link(from_keyword, to_keyword) {
     if(linker == null)
         linker = {}
     linker[from_keyword] = to_keyword
+    await set_linker(linker)
+}
+
+async function set_linker(linker) {
     await set_selected('linker',linker)
 }
 
@@ -239,6 +244,10 @@ async function set_link_show(link_show) {
     await set_selected('link_show',link_show)
 }
 
+async function is_working() {
+    return working
+}
+
 // -------------------------------------------------------------------------------- STORY
 
 var story_tree = null
@@ -333,15 +342,28 @@ var key_actions = {
         draw_help_panel()
     },
     's':async function() {
-        let show_link_rel = await get_link_show()
-        show_link_rel = !show_link_rel
-        if(!show_link_rel) {
-            hide_link()
-            await set_link_show(false)
-            return
+        if(!await is_working()) {
+            let work = await get_selected_work()
+            if(work == null)
+                return null
+            if(work.shared_token != null) {
+                display_shared_token(work)
+                return
+            }
+            await set_work_to_share(work)
+        } 
+        else
+        {
+            let show_link_rel = await get_link_show()
+            show_link_rel = !show_link_rel
+            if(!show_link_rel) {
+                hide_link()
+                await set_link_show(false)
+                return
+            }
+            await set_link_show(true)
+            show_link()
         }
-        await set_link_show(true)
-        show_link()
     },
     'x':async function() {
         let concept = await get_selected_concept()
@@ -462,6 +484,20 @@ var key_actions = {
             return
         }
         select_concept(next_concept_name)
+    },
+    't':async function() {
+        let work = await get_selected_work()
+        if(work == null)
+            return null
+        let token = prompt('shared token','')
+        if(token == null)
+            return null
+        work.shared_token = token
+        if(!await shared_work_exists(work)) {
+            alert('shared token does not exist')
+            return
+        }
+        await set_work(work)
     }
 }
 
@@ -481,14 +517,9 @@ async function get_work_list() {
     return await bm.read_key('works')
 }
 
-async function set_work(work_name, work_description, work_shared=false) {
+async function set_work(work) {
     let works = await get_work_list()
-    let work = {
-        name:work_name,
-        description:work_description,
-        shared:work_shared,
-    }
-    works[work_name] = work
+    works[work.name] = work
     await bm.write_key('works',works)
 }
 
@@ -520,13 +551,92 @@ async function remove_work(work) {
     await bm.write_key('works',works)
 }
 
+async function prompt_new_work(work=null,need_token=false) {
+    let work_name = prompt('work name',work==null?'':work.name)
+    if(work_name == null)
+        return null
+    let work_description = prompt('work description',work==null?'':work.description)
+    if(work_description == null)
+        return null
+    let shared_token = null
+    if(work != null)
+        shared_token = work.shared_token
+    if(need_token)
+        shared_token = prompt('shared token',shared_token=null?'':shared_token)
+    let new_work = {
+        name:work_name,
+        description:work_description,
+        shared_token:shared_token
+    }
+    return new_work
+}
+
+// -------------------------------------------------------------------------------- SHARED WORK
+
+function generate_shared_work_token(work) {
+    return parseInt(Math.random()*100000)+''+parseInt(Date.now())+work.name
+}
+
+function display_shared_token(work) {
+    prompt('sharing token',work.shared_token)
+}
+
+async function shared_work_exists(work) {
+    if(!is_shared_work(work))
+        return false
+    let old_prefix_data = bm.prefix_data
+    await set_work_prefix(work)
+    let exists = await bm.key_exists(get_concept_name())
+    bm.prefix_data = old_prefix_data
+    return exists
+}
+
+function is_shared_work(work) {
+    return work.shared_token != null
+}
+
+async function set_work_to_share(work) {
+    let token = generate_shared_work_token(work)
+    let old_prefix_data = bm.prefix_data
+
+    await set_work_prefix(work)
+    let concepts = await get_concepts()
+    let gx_track = await get_GX_track()
+    let linker = await get_linker()
+
+    bm.prefix_data = old_prefix_data
+    await remove_work(work)
+
+    work.shared_token = token
+    await set_work_prefix(work)
+    await save_concepts(concepts)
+    await set_GX_track(gx_track)
+    await linker
+
+    bm.prefix_data = old_prefix_data
+    await set_work(work)
+
+    display_shared_token(work)
+}
+
 // -------------------------------------------------------------------------------- PREFIX
 
 async function set_work_prefix(work) {
     bm.reset_prefix()
+
     let profile = await gsi.get_profile_data()
-    bm.set_prefix(profile.id+work.name)
-    return
+    let user_prefix = profile.id+work.name
+    bm.set_prefix(user_prefix)
+
+    if(is_shared_work(work)) {
+
+        let shared_prefix = work.shared_token
+
+        bm.set_prefix(shared_prefix,get_concept_name())
+        bm.set_prefix(shared_prefix,'GX_track')
+        bm.set_prefix(shared_prefix,'linker')
+
+    }
 }
 
 async function set_profile_prefix() {
@@ -804,6 +914,8 @@ function GX_create_profile_elements(profile) {
 
 function GX_create_work(work) {
     let gx = GX_create_caps(work.name,'work')
+    if(work.shared_token != null)
+        gx.addClass('shared')
     return gx
 }
 
@@ -932,6 +1044,8 @@ var list_btn = null
 
 async function draw_work_list() {
 
+    working = false
+
     await set_profile_prefix()
 
     await set_current_work(null)
@@ -942,16 +1056,16 @@ async function draw_work_list() {
 
     list_btn.css('display','block')
     list_btn.click(async function() {
-        let workname = prompt('work name','')
-        if(workname == null)
+        let work = await prompt_new_work()
+        if(work == null)
             return null
-        await set_selected_work(workname)
-        await set_work(workname,'')
+        await set_selected_work(work.name)
+        await set_work(work)
     })
 
     await get_work_list()
     await bm.unregister_checker(work_list_reg_id)
-    work_list_reg_id = await bm.register_checker('works',function(works) {
+    work_list_reg_id = await bm.register_checker('works',async function(works) {
         $('.concepts').html('')
         if(Object.keys(works).length == 0)
             list_btn.addClass('center')
@@ -960,6 +1074,10 @@ async function draw_work_list() {
         }
         for(let name in works) {
             let work = works[name]
+            if(is_shared_work(work) && !await shared_work_exists(work)) {
+                await remove_work(work)
+                continue
+            }
             let gx = GX_create_work(work)
             $('.concepts').append(gx)
             helpme.register_jq('work_caps',gx)
@@ -973,6 +1091,8 @@ async function draw_work_list() {
 // -------------------------------------------------------------
 
 async function draw_concepts(work) {
+
+    working = true
 
     await set_work_prefix(work)
     await bm.unregister_checker(work_list_reg_id)

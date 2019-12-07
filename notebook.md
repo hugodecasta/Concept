@@ -64,3 +64,16 @@ It is now possible to share work but all shared work are public shared work whic
 ### next step
  * share work with wanted user
  * remember the shared work you were working on !
+
+The sharing system has been removed because of unwanted file leaks and errors in automatic graphic updates.
+
+The next step is allowing sharing user to user with as much security as possible.
+ * One idea was to save all user in a global user file but it suffers a great security problem (storing in a global accessible file user data)
+ * The other idea is creating token that can be copied by sharing user to access a file (add them to their work library).
+   * This idea is good, we have to make sure that the file name is shared by all user. Maybe create a global boolMaster redirecter ?
+   * The main idea is that when we have to access user id, they give it themself, we do not store them.
+   * Maybe they can each keep a file where they store random-generated prefix giving access to the shared file
+
+Exemple for potential shared_file_name `random_torken,workname` this name is shared by the authorized people to access the file data.
+
+The current sharing system based on the shared token seems to be stable, let's push it and see
